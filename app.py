@@ -78,6 +78,12 @@ COHORT_MAPPING = {
 # Session Management
 if 'session_id' not in st.session_state:
     st.session_state['session_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
+if 'transcripto_done' not in st.session_state: st.session_state['transcripto_done'] = False
+if 'proteo_py_done' not in st.session_state: st.session_state['proteo_py_done'] = False
+if 'proteo_r_done' not in st.session_state: st.session_state['proteo_r_done'] = False
+if 'metabolo_done' not in st.session_state: st.session_state['metabolo_done'] = False
+if 'val_rna_done' not in st.session_state: st.session_state['val_rna_done'] = False
+if 'val_prot_done' not in st.session_state: st.session_state['val_prot_done'] = False
 
 # For cloud deployment, we store sessions in a temporary subdirectory of the app
 SESSION_DIR = os.path.join(APP_DIR, "Sessions", f"Session_{st.session_state['session_id']}")
@@ -102,6 +108,7 @@ def run_script(script_name, script_path, category, extra_env=None):
                 # Auto-Volcano
                 env_v = {"OMICS_OUT_DIR": SESSION_DIR}
                 subprocess.run([sys.executable, os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
+                return True
             else:
                 st.error(f"Error in {script_name}")
                 with st.expander("Logs (Full Output)"):
@@ -109,8 +116,10 @@ def run_script(script_name, script_path, category, extra_env=None):
                     st.code(res.stderr if res.stderr else "No error output.")
                     st.markdown("**Standard Output:**")
                     st.code(res.stdout if res.stdout else "No standard output.")
+                return False
         except Exception as e:
             st.error(str(e))
+            return False
 
 # ==========================================
 # SIDEBAR
@@ -237,9 +246,13 @@ elif menu == "🧪 Transcriptomics Pipeline":
     ready = os.path.exists(os.path.join(t_in, "metadata.txt")) and any(f in COHORT_MAPPING.values() for f in os.listdir(t_in))
     if ready:
         if st.button("🚀 EXECUTE DESEQ2 WORKFLOW", use_container_width=True):
-            run_script("Transcriptomics", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py"), "Transcriptomique", {"OMICS_IN_DIR": t_in})
+            if run_script("Transcriptomics", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py"), "Transcriptomique", {"OMICS_IN_DIR": t_in}):
+                st.session_state['transcripto_done'] = True
     else:
         st.error("🔒 Pipeline Locked: Metadata AND at least one Cohort count file are required.")
+
+    if st.session_state['transcripto_done']:
+        st.info("✅ Latest analysis results are ready in the Dashboard.")
 
 # ==========================================
 # PROTEOMICS
@@ -268,12 +281,17 @@ elif menu == "🧪 Proteomics Pipeline":
         bt1, bt2 = st.columns(2)
         with bt1:
             if st.button("🐍 RUN PYTHON (Welch/Pingouin)", use_container_width=True):
-                run_script("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation.py"), "Protéomique", {"OMICS_IN_DIR": p_in})
+                if run_script("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation.py"), "Protéomique", {"OMICS_IN_DIR": p_in}):
+                    st.session_state['proteo_py_done'] = True
         with bt2:
             if st.button("🧊 RUN R (DEP/Limma)", use_container_width=True):
-                run_script("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_R.R"), "Protéomique", {"OMICS_IN_DIR": p_in})
+                if run_script("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_R.R"), "Protéomique", {"OMICS_IN_DIR": p_in}):
+                    st.session_state['proteo_r_done'] = True
     else:
         st.error("🔒 Pipeline Locked: Both metadata.tsv and proteinGroups.tsv are required.")
+
+    if st.session_state['proteo_py_done'] or st.session_state['proteo_r_done']:
+        st.info("✅ Proteomics results are stored in the session folder.")
 
 # ==========================================
 # METABOLOMICS
@@ -291,9 +309,13 @@ elif menu == "🧪 Metabolomics Pipeline":
     st.subheader("Step 2: Analysis Execution")
     if os.path.exists(os.path.join(m_in, "IGBM-01-21VW MUSCLE DATA TABLES.XLSX")):
         if st.button("🧬 EXECUTE METABOLOMICS ENGINE", use_container_width=True):
-            run_script("Metabolomics", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), "Métabolomique", {"OMICS_IN_DIR": m_in})
+            if run_script("Metabolomics", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), "Métabolomique", {"OMICS_IN_DIR": m_in}):
+                st.session_state['metabolo_done'] = True
     else:
         st.error("🔒 Pipeline Locked: IGBM Excel file is required.")
+
+    if st.session_state['metabolo_done']:
+        st.info("✅ Metabolomics analysis complete.")
 
 # ==========================================
 # VALIDATIONS (EXPLICIT PATHO/RESCUE)
@@ -316,7 +338,8 @@ elif menu == "🔍 Reference Validations":
     if st.button("Run RNA Validation"):
         if not ref_p: st.warning("Upload Reference First.")
         else:
-            run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), "Validations", {"OMICS_REF_FILE": ref_p})
+            if run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), "Validations", {"OMICS_REF_FILE": ref_p}):
+                st.session_state['val_rna_done'] = True
     
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
     tr_patho = [f for f in v_files if "Genes_dans_analyse_et_dans_fichier_excel" in f]
@@ -333,11 +356,12 @@ elif menu == "🔍 Reference Validations":
         total_ana = n_common + n_extra
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Common Genes", n_common)
-        c2.metric("Missing (Paper)", n_miss)
-        c3.metric("Extras (Analysis)", n_extra)
+        c1.metric("Common Hits", n_common, help="Found in both paper and your analysis")
+        c2.metric("Missing (Paper)", n_miss, help="In paper but not in your analysis")
+        c3.metric("Extras (Analysis)", n_extra, help="Novel hits in your analysis only")
         c4.metric("Novelty Rate", f"{(n_extra/total_ana*100):.1f}%" if total_ana > 0 else "0%")
-        st.caption(f"Recall (Sensitivity): {(n_common/total_ref*100):.1f}%" if total_ref > 0 else "0%")
+        
+        st.markdown(f"**Sensitivity (Recall):** `{(n_common/total_ref*100):.1f}%` of published genes recovered.")
         with st.expander("Show RNA Overlap"): st.dataframe(df_tr)
 
     st.markdown("---")
@@ -345,7 +369,8 @@ elif menu == "🔍 Reference Validations":
     if st.button("Run Protein Validation"):
         if not ref_p: st.warning("Upload Reference First.")
         else:
-            run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p})
+            if run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p}):
+                st.session_state['val_prot_done'] = True
     
     p_files = [f for f in v_files if f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
     if p_files:
@@ -361,11 +386,12 @@ elif menu == "🔍 Reference Validations":
         total_p_ana = n_c + n_e
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Common Proteins", n_c)
+        c1.metric("Common Hits", n_c)
         c2.metric("Missing (Paper)", n_m)
         c3.metric("Extras (Analysis)", n_e)
         c4.metric("Novelty Rate", f"{(n_e/total_p_ana*100):.1f}%" if total_p_ana > 0 else "0%")
-        st.caption(f"Recall (Sensitivity): {(n_c/total_p_ref*100):.1f}%" if total_p_ref > 0 else "0%")
+        
+        st.markdown(f"**Sensitivity (Recall):** `{(n_c/total_p_ref*100):.1f}%` of published proteins recovered.")
         with st.expander("Show Protein Overlap"): st.dataframe(df_i)
 
 # Sidebar Actions (Download)
