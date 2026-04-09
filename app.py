@@ -229,12 +229,11 @@ if menu == "📊 Global Analytics Dashboard":
             gc.collect()
             
         with col_stats:
-            st.markdown(f"### Results ({perspective})")
-            st.metric("Significatifs", len(df_volc[df_volc['Sig'] != 'Not Significant']))
-            res_c = [c for c in df_plot.columns if f'Significatif_{perspective}' in c]
-            if res_c:
-                val = len(df_plot[df_plot[res_c[0]].isin(['OUI', True])])
-                st.metric("Validés", val)
+            st.markdown(f"### Perspective: {perspective}")
+            st.metric("Total Entities", len(df_plot), help="Total number of genes/proteins/metabolites in this dataset")
+            
+            n_sig = len(df_volc[df_volc['Sig'] != 'Not Significant'])
+            st.metric("Significant Hits", n_sig, help=f"Entities with P < 0.05 and |Log2FC| > {lfc_th} for {perspective}")
     else:
         st.info("⚠️ No results found.")
 

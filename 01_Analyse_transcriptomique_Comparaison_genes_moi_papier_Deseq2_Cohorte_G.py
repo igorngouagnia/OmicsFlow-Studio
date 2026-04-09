@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import sys
 
-def comparer_transcriptomique_mtm1a():
+def comparer_donnees_cohorte():
     # --- CONFIGURATION DES CHEMINS PORTABLES ---
     root_dir = os.getcwd()
     chemin_excel = os.environ.get("OMICS_REF_FILE", os.path.join(root_dir, "Multi-omics comparisons of different forms of centronuclear myopathies and the effects of several therapeutic strategies - supplementary - data", "mmc2.xlsx"))
@@ -63,7 +63,11 @@ def comparer_transcriptomique_mtm1a():
                 en_trop = ids_locaux - ids_ref
                 manquants = ids_ref - ids_locaux
 
-                # 3. EXPORT DES 6 FICHIERS AVEC LES NOMS SPÉCIFIQUES
+                # 3. EXPORT DES 3 FICHIERS PAR CONFIGURATION
+                nom_sortie_communs = f"Genes_dans_analyse_et_dans_fichier_excel_Patho_cohorte_G_{label}.csv"
+                df_communs = df_local[df_local[col_id_local].astype(str).str.strip().isin(ids_locaux & ids_ref)]
+                df_communs.to_csv(os.path.join(dossier_sortie, nom_sortie_communs), index=False, sep=';')
+
                 nom_sortie_extras = f"genes_dans_{label}_absents_dans_fichier_excel_Patho_cohorte_G.csv"
                 df_en_trop = df_local[df_local[col_id_local].astype(str).str.strip().isin(en_trop)]
                 df_en_trop.to_csv(os.path.join(dossier_sortie, nom_sortie_extras), index=False, sep=';')
@@ -72,6 +76,7 @@ def comparer_transcriptomique_mtm1a():
                 df_manquants = df_ref[df_ref[col_id_ref].astype(str).str.strip().isin(manquants)]
                 df_manquants.to_csv(os.path.join(dossier_sortie, nom_sortie_manquants), index=False, sep=';')
 
+                logger(f"   -> Créé : {nom_sortie_communs} ({len(communs)} gènes)", f_txt)
                 logger(f"   -> Créé : {nom_sortie_extras} ({len(en_trop)} gènes)", f_txt)
                 logger(f"   -> Créé : {nom_sortie_manquants} ({len(manquants)} gènes)", f_txt)
 
