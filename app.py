@@ -164,6 +164,9 @@ if menu == "📊 Global Analytics Dashboard":
 
     if df_plot is not None and not df_plot.empty and lfc_col in df_plot.columns:
         df_volc = df_plot.copy()
+        if df_volc.index.name:
+            df_volc = df_volc.reset_index()
+            
         df_volc['-log10(p-value)'] = -np.log10(pd.to_numeric(df_volc[pval_col], errors='coerce').replace(0, 1e-300))
         conds = [(df_volc[pval_col] < 0.05) & (df_volc[lfc_col] > lfc_th), (df_volc[pval_col] < 0.05) & (df_volc[lfc_col] < -lfc_th)]
         df_volc['Sig'] = np.select(conds, ['Up-Regulated', 'Down-Regulated'], 'Not Significant')
