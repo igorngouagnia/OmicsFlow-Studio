@@ -6,6 +6,7 @@ import os
 import subprocess
 import shutil
 import tempfile
+import sys
 from datetime import datetime
 
 # ==========================================
@@ -91,7 +92,7 @@ def run_script(script_name, script_path, category, extra_env=None):
     env["OMICS_OUT_DIR"] = out_dir
     if extra_env: env.update(extra_env)
         
-    cmd = ["Rscript", script_path] if script_path.endswith(".R") else ["python", script_path]
+    cmd = ["Rscript", script_path] if script_path.endswith(".R") else [sys.executable, script_path]
     
     with st.spinner(f"🚀 Processing {script_name}..."):
         try:
@@ -100,7 +101,7 @@ def run_script(script_name, script_path, category, extra_env=None):
                 st.success(f"{script_name} Completed.")
                 # Auto-Volcano
                 env_v = {"OMICS_OUT_DIR": out_dir}
-                subprocess.run(["python", os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
+                subprocess.run([sys.executable, os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
             else:
                 st.error(f"Error in {script_name}")
                 with st.expander("Logs"): st.code(res.stderr)
