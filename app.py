@@ -104,7 +104,11 @@ def run_script(script_name, script_path, category, extra_env=None):
                 subprocess.run([sys.executable, os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
             else:
                 st.error(f"Error in {script_name}")
-                with st.expander("Logs"): st.code(res.stderr)
+                with st.expander("Logs (Full Output)"):
+                    st.markdown("**Standard Error:**")
+                    st.code(res.stderr if res.stderr else "No error output.")
+                    st.markdown("**Standard Output:**")
+                    st.code(res.stdout if res.stdout else "No standard output.")
         except Exception as e:
             st.error(str(e))
 
