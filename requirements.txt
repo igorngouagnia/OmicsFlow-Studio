@@ -5,6 +5,5 @@ plotly
 pydeseq2
 pingouin
 statsmodels
-readxl
 openpyxl
-rpy2
+scipy
