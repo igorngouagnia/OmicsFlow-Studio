@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import sys
 from datetime import datetime
+import gc
 
 # ==========================================
 # CONFIGURATION & PREMIUM DESIGN (TRANSCRIPTOFLOW CLONE)
@@ -138,6 +139,17 @@ menu = st.sidebar.radio("Main Navigation", [
 st.sidebar.markdown("---")
 st.sidebar.info("Application built for research reproduction. All results are isolated in the session folder.")
 
+# --- CACHED DATA LOADERS ---
+@st.cache_data(ttl=3600)
+def load_omics_data(file_path):
+    if not os.path.exists(file_path): return None
+    return pd.read_csv(file_path, sep=";")
+
+@st.cache_data(ttl=3600)
+def load_validation_data(file_path):
+    if not os.path.exists(file_path): return None
+    return pd.read_csv(file_path, sep=";")
+
 # ==========================================
 # DASHBOARD GLOBAL
 # ==========================================
@@ -160,10 +172,11 @@ if menu == "📊 Global Analytics Dashboard":
         csvs = [f for f in csv_dir_files if f.startswith("Deseq2_Genes_Analysis")] 
         if csvs:
             c = st.sidebar.selectbox("Select Cohort File", csvs)
-            df_plot = pd.read_csv(os.path.join(t_dir, c), sep=";", index_col=0)
-            name_col = df_plot.index.name if df_plot.index.name else df_plot.columns[0]
-            lfc_col, pval_col = f'Log2FC_{perspective}', f'Pvalue_{perspective}'
-            lfc_th = 1.0
+            df_plot = load_omics_data(os.path.join(t_dir, c))
+            if df_plot is not None:
+                name_col = df_plot.index.name if df_plot.index.name else df_plot.columns[0]
+                lfc_col, pval_col = f'Log2FC_{perspective}', f'Pvalue_{perspective}'
+                lfc_th = 1.0
 
     elif layer == "Protéomique":
         p_dir = os.path.join(SESSION_DIR, "Protéomique")
@@ -177,20 +190,22 @@ if menu == "📊 Global Analytics Dashboard":
             engine = st.sidebar.selectbox("Engine Output", opts)
             age = st.sidebar.selectbox("Target Age", ["E18.5", "2w", "7w"])
             used_path = path_py if "Python" in engine else path_r
-            df_plot = pd.read_csv(used_path, sep=";")
-            name_col = 'Gene.names' if 'Gene.names' in df_plot.columns else 'Gene names'
-            lfc_col = f'Log2FC_{perspective}_{age}'
-            pval_col = f'Padj_{perspective}_{age}' if f'Padj_{perspective}_{age}' in df_plot.columns else f'Pvalue_{perspective}_{age}'
-            lfc_th = 1.0
+            df_plot = load_omics_data(used_path)
+            if df_plot is not None:
+                name_col = 'Gene.names' if 'Gene.names' in df_plot.columns else 'Gene names'
+                lfc_col = f'Log2FC_{perspective}_{age}'
+                pval_col = f'Padj_{perspective}_{age}' if f'Padj_{perspective}_{age}' in df_plot.columns else f'Pvalue_{perspective}_{age}'
+                lfc_th = 1.0
 
     elif layer == "Métabolomique":
         m_dir = os.path.join(SESSION_DIR, "Métabolomique")
         m_path = os.path.join(m_dir, "Metabolomics_Full_Analysis.csv")
         if os.path.exists(m_path):
-            df_plot = pd.read_csv(m_path, sep=";")
-            name_col = 'CHEMICAL_NAME'
-            lfc_col, pval_col = f'Log2FC_{perspective}', f'Padj_{perspective}'
-            lfc_th = 0.0
+            df_plot = load_omics_data(m_path)
+            if df_plot is not None:
+                name_col = 'CHEMICAL_NAME'
+                lfc_col, pval_col = f'Log2FC_{perspective}', f'Padj_{perspective}'
+                lfc_th = 0.0
 
     if df_plot is not None and not df_plot.empty and lfc_col in df_plot.columns:
         df_volc = df_plot.copy()
@@ -203,11 +218,15 @@ if menu == "📊 Global Analytics Dashboard":
         
         with col_plot:
             st.markdown(f"#### View: {perspective} ({layer})")
-            fig = px.scatter(df_volc, x=lfc_col, y='-log10(p-value)', color='Sig',
+            # Minimal subset for plotting to save memory
+            df_plot_mini = df_volc[[name_col, lfc_col, pval_col, '-log10(p-value)', 'Sig']].copy()
+            fig = px.scatter(df_plot_mini, x=lfc_col, y='-log10(p-value)', color='Sig',
                              color_discrete_map={'Up-Regulated': '#ff4b4b', 'Down-Regulated': '#1f77b4', 'Not Significant': '#4a4e59'},
                              hover_name=name_col)
             fig.update_layout(template="plotly_dark", plot_bgcolor='#0d1117', paper_bgcolor='#0d1117', margin=dict(t=10, l=0, r=0, b=0))
             st.plotly_chart(fig, use_container_width=True)
+            del df_plot_mini
+            gc.collect()
             
         with col_stats:
             st.markdown(f"### Results ({perspective})")
@@ -344,13 +363,13 @@ elif menu == "🔍 Reference Validations":
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
     tr_patho = [f for f in v_files if "Genes_dans_analyse_et_dans_fichier_excel" in f]
     if tr_patho:
-        df_tr = pd.read_csv(os.path.join(v_in, tr_patho[0]), sep=";")
+        df_tr = load_validation_data(os.path.join(v_in, tr_patho[0]))
         miss_tr = [f for f in v_files if "Genes_absents_dans_analyse" in f]
         extra_tr = [f for f in v_files if "présents_dans_analyse_mais_absents_du_fichier_excel" in f]
         
-        n_common = len(df_tr)
-        n_miss = len(pd.read_csv(os.path.join(v_in, miss_tr[0]), sep=";")) if miss_tr else 0
-        n_extra = len(pd.read_csv(os.path.join(v_in, extra_tr[0]), sep=";")) if extra_tr else 0
+        n_common = len(df_tr) if df_tr is not None else 0
+        n_miss = len(load_validation_data(os.path.join(v_in, miss_tr[0]))) if miss_tr else 0
+        n_extra = len(load_validation_data(os.path.join(v_in, extra_tr[0]))) if extra_tr else 0
         
         total_ref = n_common + n_miss
         total_ana = n_common + n_extra
@@ -374,13 +393,13 @@ elif menu == "🔍 Reference Validations":
     
     p_files = [f for f in v_files if f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
     if p_files:
-        df_i = pd.read_csv(os.path.join(v_in, p_files[-1]), sep=";")
+        df_i = load_validation_data(os.path.join(v_in, p_files[-1]))
         miss_p = [f for f in v_files if "absentes_dans_analyse" in f]
         extra_p = [f for f in v_files if "absente" in f and "du_fichier_excel" in f and "Proteines" in f]
         
-        n_c = len(df_i)
-        n_m = len(pd.read_csv(os.path.join(v_in, miss_p[-1]), sep=";")) if miss_p else 0
-        n_e = len(pd.read_csv(os.path.join(v_in, extra_p[-1]), sep=";")) if extra_p else 0
+        n_c = len(df_i) if df_i is not None else 0
+        n_m = len(load_validation_data(os.path.join(v_in, miss_p[-1]))) if miss_p else 0
+        n_e = len(load_validation_data(os.path.join(v_in, extra_p[-1]))) if extra_p else 0
         
         total_p_ref = n_c + n_m
         total_p_ana = n_c + n_e
