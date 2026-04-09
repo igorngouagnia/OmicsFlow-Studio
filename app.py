@@ -4,6 +4,8 @@ import numpy as np
 import plotly.express as px
 import os
 import subprocess
+import shutil
+import tempfile
 from datetime import datetime
 
 # ==========================================
@@ -76,14 +78,17 @@ COHORT_MAPPING = {
 if 'session_id' not in st.session_state:
     st.session_state['session_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+# For cloud deployment, we store sessions in a temporary subdirectory of the app
 SESSION_DIR = os.path.join(APP_DIR, "Sessions", f"Session_{st.session_state['session_id']}")
-for sub in ["Transcriptomique", "Protéomique", "Métabolomique"]:
+SUB_DIRS = ["Transcriptomique", "Protéomique", "Métabolomique", "Validations"]
+for sub in SUB_DIRS:
     os.makedirs(os.path.join(SESSION_DIR, sub), exist_ok=True)
 
 # Run Engine
-def run_script(script_name, script_path, extra_env=None):
+def run_script(script_name, script_path, category, extra_env=None):
     env = os.environ.copy()
-    env["OMICS_OUT_DIR"] = SESSION_DIR
+    out_dir = os.path.join(SESSION_DIR, category)
+    env["OMICS_OUT_DIR"] = out_dir
     if extra_env: env.update(extra_env)
         
     cmd = ["Rscript", script_path] if script_path.endswith(".R") else ["python", script_path]
@@ -92,14 +97,13 @@ def run_script(script_name, script_path, extra_env=None):
         try:
             res = subprocess.run(cmd, env=env, capture_output=True, text=True)
             if res.returncode == 0:
-                st.success(f"Execution Successful: {script_name}")
+                st.success(f"{script_name} Completed.")
                 # Auto-Volcano
-                env_v = {"OMICS_OUT_DIR": SESSION_DIR}
+                env_v = {"OMICS_OUT_DIR": out_dir}
                 subprocess.run(["python", os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
             else:
                 st.error(f"Error in {script_name}")
-                with st.expander("Show Detailed Error Log"):
-                    st.code(res.stderr)
+                with st.expander("Logs"): st.code(res.stderr)
         except Exception as e:
             st.error(str(e))
 
@@ -131,19 +135,26 @@ if menu == "📊 Global Analytics Dashboard":
     with c_srch: search_q = st.text_input("🔍 Search Genes/Metabolites...", placeholder="Ex: MTM1, BIN1...")
     with c_sel: layer = st.selectbox("Switch Omics View", ["Transcriptomique", "Protéomique", "Métabolomique"])
 
+    perspective = st.sidebar.radio("Perspective", ["Patho", "Rescue"], help="Switch between Disease effect (Patho) and Treatment effect (Rescue)")
+    
     col_plot, col_stats = st.columns([2.5, 1])
     
     df_plot = None
     if layer == "Transcriptomique":
-        csvs = [f for f in os.listdir(SESSION_DIR) if f.startswith("Deseq2_Genes_Analysis")] 
+        t_dir = os.path.join(SESSION_DIR, "Transcriptomique")
+        csv_dir_files = os.listdir(t_dir) if os.path.exists(t_dir) else []
+        csvs = [f for f in csv_dir_files if f.startswith("Deseq2_Genes_Analysis")] 
         if csvs:
             c = st.sidebar.selectbox("Select Cohort File", csvs)
-            df_plot = pd.read_csv(os.path.join(SESSION_DIR, c), sep=";", index_col=0)
-            name_col, lfc_col, pval_col, lfc_th = df_plot.index.name if df_plot.index.name else df_plot.columns[0], 'Log2FC_Patho', 'Pvalue_Patho', 1.0
+            df_plot = pd.read_csv(os.path.join(t_dir, c), sep=";", index_col=0)
+            name_col = df_plot.index.name if df_plot.index.name else df_plot.columns[0]
+            lfc_col, pval_col = f'Log2FC_{perspective}', f'Pvalue_{perspective}'
+            lfc_th = 1.0
 
     elif layer == "Protéomique":
-        path_py = os.path.join(SESSION_DIR, "Proteomics_Analysis_Full_MTM1a.csv")
-        path_r = os.path.join(SESSION_DIR, "Proteomics_Analysis_Full_MTM1.csv")
+        p_dir = os.path.join(SESSION_DIR, "Protéomique")
+        path_py = os.path.join(p_dir, "Proteomics_Analysis_Full_MTM1a.csv")
+        path_r = os.path.join(p_dir, "Proteomics_Analysis_Full_MTM1.csv")
         opts = []
         if os.path.exists(path_py): opts.append("Python Engine (Welch)")
         if os.path.exists(path_r): opts.append("R Engine (DEP/Limma)")
@@ -154,18 +165,22 @@ if menu == "📊 Global Analytics Dashboard":
             used_path = path_py if "Python" in engine else path_r
             df_plot = pd.read_csv(used_path, sep=";")
             name_col = 'Gene.names' if 'Gene.names' in df_plot.columns else 'Gene names'
-            lfc_col, pval_col, lfc_th = f'Log2FC_Patho_{age}', f'Padj_Patho_{age}' if f'Padj_Patho_{age}' in df_plot.columns else f'Pvalue_Patho_{age}', 1.0
+            lfc_col = f'Log2FC_{perspective}_{age}'
+            pval_col = f'Padj_{perspective}_{age}' if f'Padj_{perspective}_{age}' in df_plot.columns else f'Pvalue_{perspective}_{age}'
+            lfc_th = 1.0
 
     elif layer == "Métabolomique":
-        m_path = os.path.join(SESSION_DIR, "Metabolomics_Full_Analysis.csv")
+        m_dir = os.path.join(SESSION_DIR, "Métabolomique")
+        m_path = os.path.join(m_dir, "Metabolomics_Full_Analysis.csv")
         if os.path.exists(m_path):
             df_plot = pd.read_csv(m_path, sep=";")
-            name_col, lfc_col, pval_col, lfc_th = 'CHEMICAL_NAME', 'Log2FC_Patho', 'Padj_Patho', 0.0
+            name_col = 'CHEMICAL_NAME'
+            lfc_col, pval_col = f'Log2FC_{perspective}', f'Padj_{perspective}'
+            lfc_th = 0.0
 
     if df_plot is not None and not df_plot.empty and lfc_col in df_plot.columns:
         df_volc = df_plot.copy()
-        if df_volc.index.name:
-            df_volc = df_volc.reset_index()
+        if df_volc.index.name: df_volc = df_volc.reset_index()
             
         df_volc['-log10(p-value)'] = -np.log10(pd.to_numeric(df_volc[pval_col], errors='coerce').replace(0, 1e-300))
         conds = [(df_volc[pval_col] < 0.05) & (df_volc[lfc_col] > lfc_th), (df_volc[pval_col] < 0.05) & (df_volc[lfc_col] < -lfc_th)]
@@ -173,6 +188,7 @@ if menu == "📊 Global Analytics Dashboard":
         if search_query := search_q: df_volc = df_volc[df_volc[name_col].str.contains(search_query, case=False, na=False)]
         
         with col_plot:
+            st.markdown(f"#### View: {perspective} ({layer})")
             fig = px.scatter(df_volc, x=lfc_col, y='-log10(p-value)', color='Sig',
                              color_discrete_map={'Up-Regulated': '#ff4b4b', 'Down-Regulated': '#1f77b4', 'Not Significant': '#4a4e59'},
                              hover_name=name_col)
@@ -180,14 +196,14 @@ if menu == "📊 Global Analytics Dashboard":
             st.plotly_chart(fig, use_container_width=True)
             
         with col_stats:
-            st.markdown("### Targets Summary")
-            st.metric("Significatifs (Patho)", len(df_volc[df_volc['Sig'] != 'Not Significant']))
-            res_c = [c for c in df_plot.columns if 'Significatif_Rescue' in c]
+            st.markdown(f"### Results ({perspective})")
+            st.metric("Significatifs", len(df_volc[df_volc['Sig'] != 'Not Significant']))
+            res_c = [c for c in df_plot.columns if f'Significatif_{perspective}' in c]
             if res_c:
                 val = len(df_plot[df_plot[res_c[0]].isin(['OUI', True])])
-                st.metric("Cibles Rescue Validées", val)
+                st.metric("Validés", val)
     else:
-        st.warning("⚠️ Analyze data first in the 'Pipeline' tabs to populate this dashboard.")
+        st.info("⚠️ No results found.")
 
 # ==========================================
 # TRANSCRIPTOMICS
@@ -216,7 +232,7 @@ elif menu == "🧪 Transcriptomics Pipeline":
     ready = os.path.exists(os.path.join(t_in, "metadata.txt")) and any(f in COHORT_MAPPING.values() for f in os.listdir(t_in))
     if ready:
         if st.button("🚀 EXECUTE DESEQ2 WORKFLOW", use_container_width=True):
-            run_script("Transcriptomics", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py"), {"OMICS_IN_DIR": t_in})
+            run_script("Transcriptomics", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py"), "Transcriptomique", {"OMICS_IN_DIR": t_in})
     else:
         st.error("🔒 Pipeline Locked: Metadata AND at least one Cohort count file are required.")
 
@@ -247,10 +263,10 @@ elif menu == "🧪 Proteomics Pipeline":
         bt1, bt2 = st.columns(2)
         with bt1:
             if st.button("🐍 RUN PYTHON (Welch/Pingouin)", use_container_width=True):
-                run_script("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation.py"), {"OMICS_IN_DIR": p_in})
+                run_script("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation.py"), "Protéomique", {"OMICS_IN_DIR": p_in})
         with bt2:
             if st.button("🧊 RUN R (DEP/Limma)", use_container_width=True):
-                run_script("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_R.R"), {"OMICS_IN_DIR": p_in})
+                run_script("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_R.R"), "Protéomique", {"OMICS_IN_DIR": p_in})
     else:
         st.error("🔒 Pipeline Locked: Both metadata.tsv and proteinGroups.tsv are required.")
 
@@ -270,7 +286,7 @@ elif menu == "🧪 Metabolomics Pipeline":
     st.subheader("Step 2: Analysis Execution")
     if os.path.exists(os.path.join(m_in, "IGBM-01-21VW MUSCLE DATA TABLES.XLSX")):
         if st.button("🧬 EXECUTE METABOLOMICS ENGINE", use_container_width=True):
-            run_script("Metabolomics", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), {"OMICS_IN_DIR": m_in})
+            run_script("Metabolomics", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), "Métabolomique", {"OMICS_IN_DIR": m_in})
     else:
         st.error("🔒 Pipeline Locked: IGBM Excel file is required.")
 
@@ -281,52 +297,77 @@ elif menu == "🔍 Reference Validations":
     st.title("🔍 Literature Cross-Validation")
     st.markdown("Compare results with published findings in the original paper.")
     
-    ref = st.file_uploader("📁 Upload Reference Excel File (mmc2.xlsx / Supplementary)", type=["xlsx"])
+    v_in = os.path.join(SESSION_DIR, "Validations")
+    ref = st.file_uploader("📁 Upload Reference Excel File (mmc2.xlsx / S8)", type=["xlsx"])
     ref_p = None
     if ref:
-        ref_p = os.path.join(SESSION_DIR, ref.name)
+        ref_p = os.path.join(v_in, ref.name)
         with open(ref_p, "wb") as f: f.write(ref.getbuffer())
         st.success("Reference File Active.")
 
     st.markdown("---")
     
-    # 1. TRANSCRIPTOMIQUE VALIDATION
-    st.subheader("A. Transcriptomics (Cohort G / Brain 2021)")
-    if st.button("Analyze RNA Intersection"):
+    st.subheader("A. Transcriptomics (Cohort G)")
+    if st.button("Run RNA Validation"):
         if not ref_p: st.warning("Upload Reference First.")
         else:
-            run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), {"OMICS_REF_FILE": ref_p})
+            run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), "Validations", {"OMICS_REF_FILE": ref_p})
     
-    tr_patho = [f for f in os.listdir(SESSION_DIR) if "Genes_dans_analyse_et_dans_fichier_excel" in f]
+    v_files = os.listdir(v_in) if os.path.exists(v_in) else []
+    tr_patho = [f for f in v_files if "Genes_dans_analyse_et_dans_fichier_excel" in f]
     if tr_patho:
-        df_tr = pd.read_csv(os.path.join(SESSION_DIR, tr_patho[0]), sep=";")
-        st.metric("Total Genes in Common (Patho)", len(df_tr))
-        with st.expander("View Intersection Genes"): st.dataframe(df_tr)
+        df_tr = pd.read_csv(os.path.join(v_in, tr_patho[0]), sep=";")
+        miss_tr = [f for f in v_files if "Genes_absents_dans_analyse" in f]
+        extra_tr = [f for f in v_files if "présents_dans_analyse_mais_absents_du_fichier_excel" in f]
+        
+        n_common = len(df_tr)
+        n_miss = len(pd.read_csv(os.path.join(v_in, miss_tr[0]), sep=";")) if miss_tr else 0
+        n_extra = len(pd.read_csv(os.path.join(v_in, extra_tr[0]), sep=";")) if extra_tr else 0
+        
+        total_ref = n_common + n_miss
+        total_ana = n_common + n_extra
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Common Genes", n_common)
+        c2.metric("Missing (Paper)", n_miss)
+        c3.metric("Extras (Analysis)", n_extra)
+        c4.metric("Novelty Rate", f"{(n_extra/total_ana*100):.1f}%" if total_ana > 0 else "0%")
+        st.caption(f"Recall (Sensitivity): {(n_common/total_ref*100):.1f}%" if total_ref > 0 else "0%")
+        with st.expander("Show RNA Overlap"): st.dataframe(df_tr)
 
-    # 2. PROTÉOMIQUE VALIDATION
-    st.subheader("B. Proteomics (Cohort A / Cell 2021)")
-    if st.button("Analyze Protein Intersection (Table S8)"):
+    st.markdown("---")
+    st.subheader("B. Proteomics (Table S8)")
+    if st.button("Run Protein Validation"):
         if not ref_p: st.warning("Upload Reference First.")
         else:
-            run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), {"OMICS_REF_FILE": ref_p})
+            run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p})
     
-    # Distinction Patho / Rescue metrics
-    # Note: Currently scripts generate Patho intersections mainly. 
-    # Logic below assumes standard output naming from our previous edits.
-    p_files = [f for f in os.listdir(SESSION_DIR) if f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
+    p_files = [f for f in v_files if f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
     if p_files:
-        st.markdown("### Latest Comparative Results")
-        c1, c2 = st.columns(2)
-        with c1:
-            df_i = pd.read_csv(os.path.join(SESSION_DIR, p_files[-1]), sep=";")
-            st.metric(f"Proteins Intersect (Patho)", len(df_i))
-            st.caption(f"Based on: {p_files[-1]}")
-        with c2:
-            miss_f = [f for f in os.listdir(SESSION_DIR) if "absentes_dans_analyse" in f]
-            if miss_f:
-                df_m = pd.read_csv(os.path.join(SESSION_DIR, miss_f[-1]), sep=";")
-                st.metric("Missing (Paper-Only)", len(df_m))
-            
-        with st.expander("Explore Full Overlap Table"): st.dataframe(df_i)
-    else:
-        st.info("Run validation to see intersection metrics between your results and Table S8.")
+        df_i = pd.read_csv(os.path.join(v_in, p_files[-1]), sep=";")
+        miss_p = [f for f in v_files if "absentes_dans_analyse" in f]
+        extra_p = [f for f in v_files if "absente" in f and "du_fichier_excel" in f and "Proteines" in f]
+        
+        n_c = len(df_i)
+        n_m = len(pd.read_csv(os.path.join(v_in, miss_p[-1]), sep=";")) if miss_p else 0
+        n_e = len(pd.read_csv(os.path.join(v_in, extra_p[-1]), sep=";")) if extra_p else 0
+        
+        total_p_ref = n_c + n_m
+        total_p_ana = n_c + n_e
+        
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Common Proteins", n_c)
+        c2.metric("Missing (Paper)", n_m)
+        c3.metric("Extras (Analysis)", n_e)
+        c4.metric("Novelty Rate", f"{(n_e/total_p_ana*100):.1f}%" if total_p_ana > 0 else "0%")
+        st.caption(f"Recall (Sensitivity): {(n_c/total_p_ref*100):.1f}%" if total_p_ref > 0 else "0%")
+        with st.expander("Show Protein Overlap"): st.dataframe(df_i)
+
+# Sidebar Actions (Download)
+st.sidebar.markdown("---")
+if st.sidebar.button("📦 DOWNLOAD ENTIRE SESSION (ZIP)"):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        zip_path = os.path.join(tmp_dir, f"OmicsFlow_Session_{st.session_state['session_id']}")
+        shutil.make_archive(zip_path, 'zip', SESSION_DIR)
+        with open(f"{zip_path}.zip", "rb") as f:
+            st.sidebar.download_button("Download ZIP", f, file_name=f"OmicsFlow_{st.session_state['session_id']}.zip")
