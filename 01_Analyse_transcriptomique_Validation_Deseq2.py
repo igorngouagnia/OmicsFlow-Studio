@@ -25,8 +25,8 @@ except ImportError:
 
 # --- CONFIGURATION DES CHEMINS PORTABLES ---
 ROOT_DIR = os.getcwd()
-METADATA_PATH = os.environ.get("OMICS_META_PATH", os.path.join(ROOT_DIR, "Transcriptomique", "metadata.txt"))
 INPUT_DIR = os.environ.get("OMICS_IN_DIR", os.path.join(ROOT_DIR, "Transcriptomique"))
+METADATA_PATH = os.environ.get("OMICS_META_PATH", os.path.join(INPUT_DIR, "metadata.txt"))
 OUTPUT_DIR = os.environ.get("OMICS_OUT_DIR", os.path.join(ROOT_DIR, "Résultats", "Transcriptomique"))
 
 warnings.filterwarnings("ignore")

@@ -100,7 +100,7 @@ def run_script(script_name, script_path, category, extra_env=None):
             if res.returncode == 0:
                 st.success(f"{script_name} Completed.")
                 # Auto-Volcano
-                env_v = {"OMICS_OUT_DIR": out_dir}
+                env_v = {"OMICS_OUT_DIR": SESSION_DIR}
                 subprocess.run([sys.executable, os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
             else:
                 st.error(f"Error in {script_name}")
