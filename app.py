@@ -1,0 +1,329 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import os
+import subprocess
+from datetime import datetime
+
+# ==========================================
+# CONFIGURATION & PREMIUM DESIGN (TRANSCRIPTOFLOW CLONE)
+# ==========================================
+st.set_page_config(page_title="OmicsFlow Studio", layout="wide", initial_sidebar_state="expanded")
+
+st.markdown("""
+<style>
+    /* Global Background & Text */
+    .stApp { background-color: #0d1117; color: #c9d1d9; }
+    [data-testid="stSidebar"] { background-color: #161b22; border-right: 1px solid #30363d; }
+    
+    /* Metrics / Cards Styling */
+    div[data-testid="metric-container"] {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    label[data-testid="stMetricLabel"] { color: #8b949e !important; font-size: 14px !important; }
+    div[data-testid="stMetricValue"] { color: #58a6ff !important; font-weight: bold !important; }
+    
+    /* Inputs & Selectors */
+    .stSelectbox>div>div, .stNumberInput>div>div, .stFileUploader {
+        background-color: #21262d !important;
+        color: #c9d1d9 !important;
+        border-radius: 8px !important;
+    }
+    
+    h1, h2, h3 { color: #58a6ff; font-weight: 600; }
+    
+    /* Buttons Styling */
+    .stButton>button {
+        background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 24px;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(46, 160, 67, 0.4);
+        background: linear-gradient(135deg, #2ea043 0%, #3fb950 100%);
+    }
+    
+    /* Warning/Info Tweak */
+    .stAlert { background-color: rgba(22, 27, 34, 0.8) !important; border: 1px solid #30363d !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# Paths - Fully Portable for Cloud (Relative to App Root)
+BASE_DIR = os.getcwd() 
+APP_DIR = BASE_DIR # The app now lives in the repo root for cloud deployment
+
+COHORT_MAPPING = {
+    'A': "GSE160079_Raw_gene_counts_matrix_Cohort_MTM1-a.txt",
+    'B': "GSE160081_Raw_gene_counts_matrix_Cohort_MTM1-b.txt",
+    'C': "GSE160083_Raw_gene_counts_matrix_Cohort_MTM1-c.txt",
+    'D': "GSE160077_Raw_gene_counts_matrix_Cohort_BIN1.txt",
+    'E': "GSE160078_Raw_gene_counts_matrix_Cohort_DNM2_Updated-07-01-2024.xlsx",
+    'F': "GSE282489_raw_counts_bin1_cohort.txt",
+    'G': "GSE282489_raw_counts_dnm2_cohort.txt"
+}
+
+# Session Management
+if 'session_id' not in st.session_state:
+    st.session_state['session_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+SESSION_DIR = os.path.join(APP_DIR, "Sessions", f"Session_{st.session_state['session_id']}")
+for sub in ["Transcriptomique", "Protéomique", "Métabolomique"]:
+    os.makedirs(os.path.join(SESSION_DIR, sub), exist_ok=True)
+
+# Run Engine
+def run_script(script_name, script_path, extra_env=None):
+    env = os.environ.copy()
+    env["OMICS_OUT_DIR"] = SESSION_DIR
+    if extra_env: env.update(extra_env)
+        
+    cmd = ["Rscript", script_path] if script_path.endswith(".R") else ["python", script_path]
+    
+    with st.spinner(f"🚀 Processing {script_name}..."):
+        try:
+            res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            if res.returncode == 0:
+                st.success(f"Execution Successful: {script_name}")
+                # Auto-Volcano
+                env_v = {"OMICS_OUT_DIR": SESSION_DIR}
+                subprocess.run(["python", os.path.join(BASE_DIR, "04_Volcano_Plots_Generator.py")], env=env_v)
+            else:
+                st.error(f"Error in {script_name}")
+                with st.expander("Show Detailed Error Log"):
+                    st.code(res.stderr)
+        except Exception as e:
+            st.error(str(e))
+
+# ==========================================
+# SIDEBAR
+# ==========================================
+st.sidebar.markdown("<h2 style='text-align: center; color: #58a6ff;'>🧬 OmicsFlow</h2>", unsafe_allow_html=True)
+st.sidebar.caption(f"<div style='text-align: center;'>Workspace: {st.session_state['session_id']}</div><br>", unsafe_allow_html=True)
+
+menu = st.sidebar.radio("Main Navigation", [
+    "📊 Global Analytics Dashboard",
+    "🧪 Transcriptomics Pipeline", 
+    "🧪 Proteomics Pipeline",
+    "🧪 Metabolomics Pipeline",
+    "🔍 Reference Validations"
+])
+
+st.sidebar.markdown("---")
+st.sidebar.info("Application built for research reproduction. All results are isolated in the session folder.")
+
+# ==========================================
+# DASHBOARD GLOBAL
+# ==========================================
+if menu == "📊 Global Analytics Dashboard":
+    st.title("📊 Multi-Omics Studio")
+    st.markdown("Central visualization center for your results.")
+    
+    c_srch, c_sel = st.columns([2, 1])
+    with c_srch: search_q = st.text_input("🔍 Search Genes/Metabolites...", placeholder="Ex: MTM1, BIN1...")
+    with c_sel: layer = st.selectbox("Switch Omics View", ["Transcriptomique", "Protéomique", "Métabolomique"])
+
+    col_plot, col_stats = st.columns([2.5, 1])
+    
+    df_plot = None
+    if layer == "Transcriptomique":
+        csvs = [f for f in os.listdir(SESSION_DIR) if f.startswith("Deseq2_Genes_Analysis")] 
+        if csvs:
+            c = st.sidebar.selectbox("Select Cohort File", csvs)
+            df_plot = pd.read_csv(os.path.join(SESSION_DIR, c), sep=";", index_col=0)
+            name_col, lfc_col, pval_col, lfc_th = df_plot.index.name if df_plot.index.name else df_plot.columns[0], 'Log2FC_Patho', 'Pvalue_Patho', 1.0
+
+    elif layer == "Protéomique":
+        path_py = os.path.join(SESSION_DIR, "Proteomics_Analysis_Full_MTM1a.csv")
+        path_r = os.path.join(SESSION_DIR, "Proteomics_Analysis_Full_MTM1.csv")
+        opts = []
+        if os.path.exists(path_py): opts.append("Python Engine (Welch)")
+        if os.path.exists(path_r): opts.append("R Engine (DEP/Limma)")
+        
+        if opts:
+            engine = st.sidebar.selectbox("Engine Output", opts)
+            age = st.sidebar.selectbox("Target Age", ["E18.5", "2w", "7w"])
+            used_path = path_py if "Python" in engine else path_r
+            df_plot = pd.read_csv(used_path, sep=";")
+            name_col = 'Gene.names' if 'Gene.names' in df_plot.columns else 'Gene names'
+            lfc_col, pval_col, lfc_th = f'Log2FC_Patho_{age}', f'Padj_Patho_{age}' if f'Padj_Patho_{age}' in df_plot.columns else f'Pvalue_Patho_{age}', 1.0
+
+    elif layer == "Métabolomique":
+        m_path = os.path.join(SESSION_DIR, "Metabolomics_Full_Analysis.csv")
+        if os.path.exists(m_path):
+            df_plot = pd.read_csv(m_path, sep=";")
+            name_col, lfc_col, pval_col, lfc_th = 'CHEMICAL_NAME', 'Log2FC_Patho', 'Padj_Patho', 0.0
+
+    if df_plot is not None and not df_plot.empty and lfc_col in df_plot.columns:
+        df_volc = df_plot.copy()
+        df_volc['-log10(p-value)'] = -np.log10(pd.to_numeric(df_volc[pval_col], errors='coerce').replace(0, 1e-300))
+        conds = [(df_volc[pval_col] < 0.05) & (df_volc[lfc_col] > lfc_th), (df_volc[pval_col] < 0.05) & (df_volc[lfc_col] < -lfc_th)]
+        df_volc['Sig'] = np.select(conds, ['Up-Regulated', 'Down-Regulated'], 'Not Significant')
+        if search_query := search_q: df_volc = df_volc[df_volc[name_col].str.contains(search_query, case=False, na=False)]
+        
+        with col_plot:
+            fig = px.scatter(df_volc, x=lfc_col, y='-log10(p-value)', color='Sig',
+                             color_discrete_map={'Up-Regulated': '#ff4b4b', 'Down-Regulated': '#1f77b4', 'Not Significant': '#4a4e59'},
+                             hover_name=name_col)
+            fig.update_layout(template="plotly_dark", plot_bgcolor='#0d1117', paper_bgcolor='#0d1117', margin=dict(t=10, l=0, r=0, b=0))
+            st.plotly_chart(fig, use_container_width=True)
+            
+        with col_stats:
+            st.markdown("### Targets Summary")
+            st.metric("Significatifs (Patho)", len(df_volc[df_volc['Sig'] != 'Not Significant']))
+            res_c = [c for c in df_plot.columns if 'Significatif_Rescue' in c]
+            if res_c:
+                val = len(df_plot[df_plot[res_c[0]].isin(['OUI', True])])
+                st.metric("Cibles Rescue Validées", val)
+    else:
+        st.warning("⚠️ Analyze data first in the 'Pipeline' tabs to populate this dashboard.")
+
+# ==========================================
+# TRANSCRIPTOMICS
+# ==========================================
+elif menu == "🧪 Transcriptomics Pipeline":
+    st.title("RNA-Seq Analysis (DESeq2)")
+    t_in = os.path.join(SESSION_DIR, "Transcriptomique")
+    
+    st.subheader("Step 1: Resource Loading")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### Metadata Management")
+        meta = st.file_uploader("Upload metadata.txt", type=["txt", "tsv"])
+        if meta:
+            with open(os.path.join(t_in, "metadata.txt"), "wb") as f: f.write(meta.getbuffer())
+            st.success("Metadata Uploaded.")
+    with c2:
+        st.markdown("#### Count Matrix Selection")
+        coh = st.selectbox("Assign to Cohort ID:", list(COHORT_MAPPING.keys()))
+        counts = st.file_uploader(f"Upload counts for Cohort {coh}", type=["txt", "csv", "tsv", "xlsx"])
+        if counts:
+            with open(os.path.join(t_in, COHORT_MAPPING[coh]), "wb") as f: f.write(counts.getbuffer())
+            st.success(f"File Assigned to {COHORT_MAPPING[coh]}.")
+
+    st.subheader("Step 2: Analysis Execution")
+    ready = os.path.exists(os.path.join(t_in, "metadata.txt")) and any(f in COHORT_MAPPING.values() for f in os.listdir(t_in))
+    if ready:
+        if st.button("🚀 EXECUTE DESEQ2 WORKFLOW", use_container_width=True):
+            run_script("Transcriptomics", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py"), {"OMICS_IN_DIR": t_in})
+    else:
+        st.error("🔒 Pipeline Locked: Metadata AND at least one Cohort count file are required.")
+
+# ==========================================
+# PROTEOMICS
+# ==========================================
+elif menu == "🧪 Proteomics Pipeline":
+    st.title("Proteomics Analysis (MaxQuant)")
+    p_in = os.path.join(SESSION_DIR, "Protéomique")
+    
+    st.subheader("Step 1: Resource Loading")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### Experimental Design")
+        p_meta = st.file_uploader("Upload metadata.tsv", type=["tsv", "txt"])
+        if p_meta:
+            with open(os.path.join(p_in, "metadata.tsv"), "wb") as f: f.write(p_meta.getbuffer())
+            st.success("Proteomics Metadata Uploaded.")
+    with c2:
+        st.markdown("#### Protein Intensity Table")
+        p_grp = st.file_uploader("Upload proteinGroups.tsv", type=["tsv", "txt"])
+        if p_grp:
+            with open(os.path.join(p_in, "proteinGroups.tsv"), "wb") as f: f.write(p_grp.getbuffer())
+            st.success("proteinGroups Uploaded.")
+
+    st.subheader("Step 2: Statistics Engine Selection")
+    if os.path.exists(os.path.join(p_in, "metadata.tsv")) and os.path.exists(os.path.join(p_in, "proteinGroups.tsv")):
+        bt1, bt2 = st.columns(2)
+        with bt1:
+            if st.button("🐍 RUN PYTHON (Welch/Pingouin)", use_container_width=True):
+                run_script("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation.py"), {"OMICS_IN_DIR": p_in})
+        with bt2:
+            if st.button("🧊 RUN R (DEP/Limma)", use_container_width=True):
+                run_script("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_R.R"), {"OMICS_IN_DIR": p_in})
+    else:
+        st.error("🔒 Pipeline Locked: Both metadata.tsv and proteinGroups.tsv are required.")
+
+# ==========================================
+# METABOLOMICS
+# ==========================================
+elif menu == "🧪 Metabolomics Pipeline":
+    st.title("Metabolomics Analysis (IGBM)")
+    m_in = os.path.join(SESSION_DIR, "Métabolomique")
+    
+    st.subheader("Step 1: Unified Data Upload")
+    m_xlsx = st.file_uploader("Upload IGBM Excel Table", type=["xlsx"])
+    if m_xlsx:
+        with open(os.path.join(m_in, "IGBM-01-21VW MUSCLE DATA TABLES.XLSX"), "wb") as f: f.write(m_xlsx.getbuffer())
+        st.success("Metabolomics Data Uploaded.")
+        
+    st.subheader("Step 2: Analysis Execution")
+    if os.path.exists(os.path.join(m_in, "IGBM-01-21VW MUSCLE DATA TABLES.XLSX")):
+        if st.button("🧬 EXECUTE METABOLOMICS ENGINE", use_container_width=True):
+            run_script("Metabolomics", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), {"OMICS_IN_DIR": m_in})
+    else:
+        st.error("🔒 Pipeline Locked: IGBM Excel file is required.")
+
+# ==========================================
+# VALIDATIONS (EXPLICIT PATHO/RESCUE)
+# ==========================================
+elif menu == "🔍 Reference Validations":
+    st.title("🔍 Literature Cross-Validation")
+    st.markdown("Compare results with published findings in the original paper.")
+    
+    ref = st.file_uploader("📁 Upload Reference Excel File (mmc2.xlsx / Supplementary)", type=["xlsx"])
+    ref_p = None
+    if ref:
+        ref_p = os.path.join(SESSION_DIR, ref.name)
+        with open(ref_p, "wb") as f: f.write(ref.getbuffer())
+        st.success("Reference File Active.")
+
+    st.markdown("---")
+    
+    # 1. TRANSCRIPTOMIQUE VALIDATION
+    st.subheader("A. Transcriptomics (Cohort G / Brain 2021)")
+    if st.button("Analyze RNA Intersection"):
+        if not ref_p: st.warning("Upload Reference First.")
+        else:
+            run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), {"OMICS_REF_FILE": ref_p})
+    
+    tr_patho = [f for f in os.listdir(SESSION_DIR) if "Genes_dans_analyse_et_dans_fichier_excel" in f]
+    if tr_patho:
+        df_tr = pd.read_csv(os.path.join(SESSION_DIR, tr_patho[0]), sep=";")
+        st.metric("Total Genes in Common (Patho)", len(df_tr))
+        with st.expander("View Intersection Genes"): st.dataframe(df_tr)
+
+    # 2. PROTÉOMIQUE VALIDATION
+    st.subheader("B. Proteomics (Cohort A / Cell 2021)")
+    if st.button("Analyze Protein Intersection (Table S8)"):
+        if not ref_p: st.warning("Upload Reference First.")
+        else:
+            run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), {"OMICS_REF_FILE": ref_p})
+    
+    # Distinction Patho / Rescue metrics
+    # Note: Currently scripts generate Patho intersections mainly. 
+    # Logic below assumes standard output naming from our previous edits.
+    p_files = [f for f in os.listdir(SESSION_DIR) if f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
+    if p_files:
+        st.markdown("### Latest Comparative Results")
+        c1, c2 = st.columns(2)
+        with c1:
+            df_i = pd.read_csv(os.path.join(SESSION_DIR, p_files[-1]), sep=";")
+            st.metric(f"Proteins Intersect (Patho)", len(df_i))
+            st.caption(f"Based on: {p_files[-1]}")
+        with c2:
+            miss_f = [f for f in os.listdir(SESSION_DIR) if "absentes_dans_analyse" in f]
+            if miss_f:
+                df_m = pd.read_csv(os.path.join(SESSION_DIR, miss_f[-1]), sep=";")
+                st.metric("Missing (Paper-Only)", len(df_m))
+            
+        with st.expander("Explore Full Overlap Table"): st.dataframe(df_i)
+    else:
+        st.info("Run validation to see intersection metrics between your results and Table S8.")
