@@ -180,8 +180,12 @@ if menu == "📊 Global Analytics Dashboard":
             c = st.sidebar.selectbox("Select Cohort File", csvs)
             df_plot = load_omics_data(os.path.join(t_dir, c))
             if df_plot is not None:
-                name_col = df_plot.index.name if df_plot.index.name else df_plot.columns[0]
-                lfc_col, pval_col = f'Log2FC_{perspective}', f'Pvalue_{perspective}'
+                name_col = next((c for c in ["Gene_Symbol", "Gene Symbol", "symbol", "gene_name"] if c in df_plot.columns), df_plot.columns[0])
+                if df_plot.index.name: name_col = df_plot.index.name
+                
+                lfc_col = f'Log2FC_{perspective}'
+                # Robust P-value detection
+                pval_col = next((c for c in [f'Pvalue_{perspective}', f'Padj_{perspective}', f'padj_{perspective}'] if c in df_plot.columns), f'Pvalue_{perspective}')
                 lfc_th = 1.0
 
     elif layer == "Protéomique":
@@ -229,6 +233,13 @@ if menu == "📊 Global Analytics Dashboard":
             fig = px.scatter(df_plot_mini, x=lfc_col, y='-log10(p-value)', color='Sig',
                              color_discrete_map={'Up-Regulated': '#ff4b4b', 'Down-Regulated': '#1f77b4', 'Not Significant': '#4a4e59'},
                              hover_name=name_col)
+            
+            # Add Threshold Lines
+            fig.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="#888", annotation_text="p=0.05", annotation_position="top left")
+            if lfc_th > 0:
+                fig.add_vline(x=lfc_th, line_dash="dash", line_color="#888")
+                fig.add_vline(x=-lfc_th, line_dash="dash", line_color="#888")
+            
             fig.update_layout(template="plotly_dark", plot_bgcolor='#0d1117', paper_bgcolor='#0d1117', margin=dict(t=10, l=0, r=0, b=0))
             st.plotly_chart(fig, use_container_width=True)
             del df_plot_mini
