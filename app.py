@@ -77,14 +77,18 @@ COHORT_MAPPING = {
 }
 
 # Session Management
-if 'session_id' not in st.session_state:
-    st.session_state['session_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
-    st.session_state['transcripto_done'] = False
-    st.session_state['proteo_py_done'] = False
-    st.session_state['proteo_r_done'] = False
-    st.session_state['metabolo_done'] = False
-    st.session_state['val_rna_done'] = False
-    st.session_state['val_prot_done'] = False
+session_defaults = {
+    'session_id': datetime.now().strftime("%Y%m%d_%H%M%S"),
+    'transcripto_done': False,
+    'proteo_py_done': False,
+    'proteo_r_done': False,
+    'metabolo_done': False,
+    'val_rna_done': False,
+    'val_prot_done': False
+}
+for key, val in session_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 # For cloud deployment, we store sessions in a temporary subdirectory of the app
 SESSION_DIR = os.path.join(APP_DIR, "Sessions", f"Session_{st.session_state['session_id']}")
