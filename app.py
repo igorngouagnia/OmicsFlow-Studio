@@ -363,6 +363,7 @@ elif menu == "🔍 Reference Validations":
     ref = st.file_uploader("📁 Upload Reference Excel File (mmc2.xlsx / S8)", type=["xlsx"])
     ref_p = None
     if ref:
+        os.makedirs(v_in, exist_ok=True)
         ref_p = os.path.join(v_in, ref.name)
         with open(ref_p, "wb") as f: f.write(ref.getbuffer())
         st.success("Reference File Active.")
@@ -377,8 +378,8 @@ elif menu == "🔍 Reference Validations":
                 st.session_state['val_rna_done'] = True
     
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
-    # Support both new (Intersection_) and old (Genes_dans_analyse...) prefixes
-    tr_hits = [f for f in v_files if f.startswith("Intersection_RNA_Patho") or "Genes_dans_analyse_et_dans_fichier_excel" in f]
+    # Case-insensitive robust detection for Transcriptomics
+    tr_hits = [f for f in v_files if ("intersection" in f.lower() and "rna" in f.lower()) or ("analyse" in f.lower() and "excel" in f.lower() and "genes" in f.lower())]
     
     if tr_hits:
         # Configuration Selector
@@ -421,7 +422,9 @@ elif menu == "🔍 Reference Validations":
     
     # Re-scan Validations folder to see new results
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
-    p_hits = [f for f in v_files if f.startswith("Intersection_Protein_Patho") or f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
+    # Case-insensitive robust detection for Proteomics
+    p_hits = [f for f in v_files if ("intersection" in f.lower() and "protein" in f.lower()) or ("analyse" in f.lower() and "excel" in f.lower() and "proteines" in f.lower())]
+    
     if p_hits:
         selected_p = st.selectbox("Select Protein Analysis Output", p_hits)
         df_i = load_validation_data(os.path.join(v_in, selected_p))
