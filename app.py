@@ -165,7 +165,9 @@ if menu == "📊 Global Analytics Dashboard":
     with c_srch: search_q = st.text_input("🔍 Search Genes/Metabolites...", placeholder="Ex: MTM1, BIN1...")
     with c_sel: layer = st.selectbox("Switch Omics View", ["Transcriptomique", "Protéomique", "Métabolomique"])
 
-    perspective = st.sidebar.radio("Perspective", ["Patho", "Rescue"], help="Switch between Disease effect (Patho) and Treatment effect (Rescue)")
+    persp_idx = 0 if menu == "🔍 Reference Validations" else (1 if st.session_state.get('perspective') == "Rescue" else 0)
+    perspective = st.sidebar.radio("Perspective", ["Patho", "Rescue"], index=persp_idx, help="Switch between Disease effect (Patho) and Treatment effect (Rescue)")
+    st.session_state['perspective'] = perspective
     
     col_plot, col_stats = st.columns([2.5, 1])
     
@@ -364,11 +366,11 @@ elif menu == "🔍 Reference Validations":
                 st.session_state['val_rna_done'] = True
     
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
-    tr_patho = [f for f in v_files if "Genes_dans_analyse_et_dans_fichier_excel" in f]
-    if tr_patho:
-        df_tr = load_validation_data(os.path.join(v_in, tr_patho[0]))
-        miss_tr = [f for f in v_files if "Genes_absents_dans_analyse" in f]
-        extra_tr = [f for f in v_files if "présents_dans_analyse_mais_absents_du_fichier_excel" in f]
+    tr_hits = [f for f in v_files if f.startswith("Intersection_RNA_Patho")]
+    if tr_hits:
+        df_tr = load_validation_data(os.path.join(v_in, tr_hits[0]))
+        miss_tr = [f for f in v_files if f.startswith("Missing_RNA_Patho")]
+        extra_tr = [f for f in v_files if f.startswith("Extras_RNA_Patho")]
         
         n_common = len(df_tr) if df_tr is not None else 0
         n_miss = len(load_validation_data(os.path.join(v_in, miss_tr[0]))) if miss_tr else 0
@@ -394,11 +396,12 @@ elif menu == "🔍 Reference Validations":
             if run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p}):
                 st.session_state['val_prot_done'] = True
     
-    p_files = [f for f in v_files if f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
-    if p_files:
-        df_i = load_validation_data(os.path.join(v_in, p_files[-1]))
-        miss_p = [f for f in v_files if "absentes_dans_analyse" in f]
-        extra_p = [f for f in v_files if "absente" in f and "du_fichier_excel" in f and "Proteines" in f]
+    p_hits = [f for f in v_files if f.startswith("Intersection_Protein_Patho")]
+    if p_hits:
+        # Use latest selection or E18.5/2w/7w fallback
+        df_i = load_validation_data(os.path.join(v_in, p_hits[-1]))
+        miss_p = [f for f in v_files if f.startswith("Missing_Protein_Patho")]
+        extra_p = [f for f in v_files if f.startswith("Extras_Protein_Patho")]
         
         n_c = len(df_i) if df_i is not None else 0
         n_m = len(load_validation_data(os.path.join(v_in, miss_p[-1]))) if miss_p else 0

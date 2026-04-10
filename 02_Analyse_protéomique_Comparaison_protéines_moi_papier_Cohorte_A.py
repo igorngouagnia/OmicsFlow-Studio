@@ -68,23 +68,28 @@ def comparer_proteomique_mtm1a():
                 logger(f"Manquants (Papier uniquement) : {len(manquants)} gènes.", f_txt)
 
                 # 4. EXPORT DES 3 FICHIERS PAR ÂGE
-                
                 # A. Intersection : Protéines dans l'analyse ET dans le fichier excel
+                nom_sortie_communs = f"Intersection_Protein_Patho_{age}.csv"
                 df_communs = df_local[df_local[col_gene_local].apply(
                     lambda x: any(n.strip().upper() in communs for n in str(x).split(';'))
                 )]
-                df_communs.to_csv(os.path.join(dossier_sortie, f"Proteines_dans_analyse_et_dans_fichier_excel_Patho_{age}.csv"), sep=';', index=False)
+                df_communs.to_csv(os.path.join(dossier_sortie, nom_sortie_communs), sep=';', index=False)
                 
                 # B. Extras : Protéines dans l'analyse ABSENTES dans le fichier excel
+                nom_sortie_extras = f"Extras_Protein_Patho_{age}.csv"
                 df_extra = df_local[df_local[col_gene_local].apply(
                     lambda x: any(n.strip().upper() in en_trop for n in str(x).split(';'))
                 )]
-                df_extra.to_csv(os.path.join(dossier_sortie, f"Proteines_dans_analyse_absentes_dans_fichier_excel_Patho_{age}.csv"), sep=';', index=False)
+                df_extra.to_csv(os.path.join(dossier_sortie, nom_sortie_extras), sep=';', index=False)
                 
                 # C. Manquants : Protéines dans le fichier excel ABSENTES dans l'analyse
-                # On récupère les lignes de l'Excel correspondant aux noms manquants
+                nom_sortie_missing = f"Missing_Protein_Patho_{age}.csv"
                 df_miss = df_s8[df_s8[nom_col_ref].astype(str).str.upper().isin(manquants)]
-                df_miss.to_csv(os.path.join(dossier_sortie, f"Proteines_dans_fichier_excel_absentes_dans_analyse_Patho_{age}.csv"), sep=';', index=False)
+                df_miss.to_csv(os.path.join(dossier_sortie, nom_sortie_missing), sep=';', index=False)
+
+                logger(f"   -> Créé : {nom_sortie_communs} ({len(communs)} gènes)", f_txt)
+                logger(f"   -> Créé : {nom_sortie_extras} ({len(en_trop)} gènes)", f_txt)
+                logger(f"   -> Créé : {nom_sortie_missing} ({len(manquants)} gènes)", f_txt)
 
             logger("\nTraitement terminé. Les 6 fichiers de comparaison ont été générés avec succès.", f_txt)
 

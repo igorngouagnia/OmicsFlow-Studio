@@ -64,19 +64,19 @@ def comparer_donnees_cohorte():
                 manquants = ids_ref - ids_locaux
 
                 # 3. EXPORT DES 3 FICHIERS PAR CONFIGURATION
-                nom_sortie_communs = f"Genes_dans_analyse_et_dans_fichier_excel_Patho_cohorte_G_{label}.csv"
+                nom_sortie_communs = f"Intersection_RNA_Patho_{label}.csv"
                 df_communs = df_local[df_local[col_id_local].astype(str).str.strip().isin(ids_locaux & ids_ref)]
                 df_communs.to_csv(os.path.join(dossier_sortie, nom_sortie_communs), index=False, sep=';')
 
-                nom_sortie_extras = f"genes_dans_{label}_absents_dans_fichier_excel_Patho_cohorte_G.csv"
+                nom_sortie_extras = f"Extras_RNA_Patho_{label}.csv"
                 df_en_trop = df_local[df_local[col_id_local].astype(str).str.strip().isin(en_trop)]
                 df_en_trop.to_csv(os.path.join(dossier_sortie, nom_sortie_extras), index=False, sep=';')
                 
-                nom_sortie_manquants = f"genes_dans_fichier_excel_absents_dans_{label}_Patho_cohorte_G.csv"
+                nom_sortie_manquants = f"Missing_RNA_Patho_{label}.csv"
                 df_manquants = df_ref[df_ref[col_id_ref].astype(str).str.strip().isin(manquants)]
                 df_manquants.to_csv(os.path.join(dossier_sortie, nom_sortie_manquants), index=False, sep=';')
 
-                logger(f"   -> Créé : {nom_sortie_communs} ({len(communs)} gènes)", f_txt)
+                logger(f"   -> Créé : {nom_sortie_communs} ({len(ids_locaux & ids_ref)} gènes)", f_txt)
                 logger(f"   -> Créé : {nom_sortie_extras} ({len(en_trop)} gènes)", f_txt)
                 logger(f"   -> Créé : {nom_sortie_manquants} ({len(manquants)} gènes)", f_txt)
 
