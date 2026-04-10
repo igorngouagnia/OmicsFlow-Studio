@@ -6,7 +6,7 @@ def comparer_donnees_cohorte():
     # --- CONFIGURATION DES CHEMINS PORTABLES ---
     root_dir = os.getcwd()
     chemin_excel = os.environ.get("OMICS_REF_FILE", os.path.join(root_dir, "Multi-omics comparisons of different forms of centronuclear myopathies and the effects of several therapeutic strategies - supplementary - data", "mmc2.xlsx"))
-    dossier_entree = os.environ.get("OMICS_OUT_DIR", os.path.join(root_dir, "Résultats", "Transcriptomique"))
+    dossier_entree = os.environ.get("OMICS_IN_DIR", os.path.join(root_dir, "Résultats", "Transcriptomique"))
     dossier_sortie = os.environ.get("OMICS_OUT_DIR", os.path.join(root_dir, "Résultats", "Transcriptomique"))
     
     # Nom du fichier de rapport à générer

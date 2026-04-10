@@ -374,7 +374,8 @@ elif menu == "🔍 Reference Validations":
     if st.button("Run RNA Validation"):
         if not ref_p: st.warning("Upload Reference First.")
         else:
-            if run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), "Validations", {"OMICS_REF_FILE": ref_p}):
+            in_dir = os.path.join(SESSION_DIR, "Transcriptomique")
+            if run_script("ARN Validation", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), "Validations", {"OMICS_REF_FILE": ref_p, "OMICS_IN_DIR": in_dir}):
                 st.session_state['val_rna_done'] = True
     
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
@@ -417,7 +418,8 @@ elif menu == "🔍 Reference Validations":
     if st.button("Run Protein Validation"):
         if not ref_p: st.warning("Upload Reference First.")
         else:
-            if run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p}):
+            in_dir = os.path.join(SESSION_DIR, "Protéomique")
+            if run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p, "OMICS_IN_DIR": in_dir}):
                 st.session_state['val_prot_done'] = True
     
     # Re-scan Validations folder to see new results

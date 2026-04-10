@@ -5,7 +5,7 @@ def comparer_proteomique_mtm1a():
     # --- CONFIGURATION DES CHEMINS PORTABLES ---
     root_dir = os.getcwd()
     chemin_excel = os.environ.get("OMICS_REF_FILE", os.path.join(root_dir, "Multi-omics comparisons of different forms of centronuclear myopathies and the effects of several therapeutic strategies - supplementary - data", "mmc2.xlsx"))
-    dossier_entree = os.environ.get("OMICS_OUT_DIR", os.path.join(root_dir, "Résultats", "Protéomique"))
+    dossier_entree = os.environ.get("OMICS_IN_DIR", os.path.join(root_dir, "Résultats", "Protéomique"))
     dossier_sortie = os.environ.get("OMICS_OUT_DIR", os.path.join(root_dir, "Résultats", "Protéomique"))
     
     nom_rapport_txt = "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.txt"
