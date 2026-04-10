@@ -375,16 +375,13 @@ elif menu == "🔍 Reference Validations":
         
         df_tr = load_validation_data(os.path.join(v_in, selected_conf))
         
-        # Determine prefix for related files (robustly)
-        if selected_conf.startswith("Intersection_RNA_Patho_"):
-            conf_suffix = selected_conf.replace("Intersection_RNA_Patho_", "")
-            miss_tr = [f for f in v_files if f.startswith("Missing_RNA_Patho") and conf_suffix in f]
-            extra_tr = [f for f in v_files if f.startswith("Extras_RNA_Patho") and conf_suffix in f]
-        else:
-            # Old naming convention fallback
-            conf_suffix = selected_conf.split("_")[-1].replace(".csv", "")
-            miss_tr = [f for f in v_files if "Genes_absents_dans_analyse" in f]
-            extra_tr = [f for f in v_files if "présents_dans_analyse_mais_absents_du_fichier_excel" in f]
+        # Robustly find associated files by extracting the config label
+        # Example: 'Intersection_RNA_Patho_deseq2_standard.csv' -> 'deseq2_standard'
+        # Example: 'Genes_dans_analyse_et_dans_fichier_excel_Patho_cohorte_G_deseq2_standard.csv' -> 'deseq2_standard'
+        conf_label = selected_conf.replace("Intersection_RNA_Patho_", "").replace("Genes_dans_analyse_et_dans_fichier_excel_Patho_cohorte_G_", "").replace(".csv", "")
+        
+        miss_tr = [f for f in v_files if ("Missing_RNA_Patho" in f or "Genes_absents_dans_analyse" in f) and conf_label in f]
+        extra_tr = [f for f in v_files if ("Extras_RNA_Patho" in f or "présents_dans_analyse_mais_absents_du_fichier_excel" in f) and conf_label in f]
         
         n_common = len(df_tr) if df_tr is not None else 0
         n_miss = len(load_validation_data(os.path.join(v_in, miss_tr[0]))) if miss_tr else 0
@@ -418,14 +415,9 @@ elif menu == "🔍 Reference Validations":
         selected_p = st.selectbox("Select Protein Analysis Output", p_hits)
         df_i = load_validation_data(os.path.join(v_in, selected_p))
         
-        if selected_p.startswith("Intersection_Protein_Patho_"):
-            p_suffix = selected_p.replace("Intersection_Protein_Patho_", "")
-            miss_p = [f for f in v_files if f.startswith("Missing_Protein_Patho") and p_suffix in f]
-            extra_p = [f for f in v_files if f.startswith("Extras_Protein_Patho") and p_suffix in f]
-        else:
-            # Fallback
-            miss_p = [f for f in v_files if "absentes_dans_analyse" in f and "Proteines" in f]
-            extra_p = [f for f in v_files if "du_fichier_excel" in f and "Proteines" in f and "absente" in f]
+        p_label = selected_p.replace("Intersection_Protein_Patho_", "").replace("Proteines_dans_analyse_et_dans_fichier_excel_Patho_", "").replace(".csv", "")
+        miss_p = [f for f in v_files if ("Missing_Protein_Patho" in f or "absentes_dans_analyse" in f) and p_label in f]
+        extra_p = [f for f in v_files if ("Extras_Protein_Patho" in f or "absente" in f and "du_fichier_excel" in f) and p_label in f]
         
         n_c = len(df_i) if df_i is not None else 0
         n_m = len(load_validation_data(os.path.join(v_in, miss_p[0]))) if miss_p else 0
