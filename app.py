@@ -366,7 +366,8 @@ elif menu == "🔍 Reference Validations":
                 st.session_state['val_rna_done'] = True
     
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
-    tr_hits = [f for f in v_files if f.startswith("Intersection_RNA_Patho")]
+    # Support both new (Intersection_) and old (Genes_dans_analyse...) prefixes
+    tr_hits = [f for f in v_files if f.startswith("Intersection_RNA_Patho") or "Genes_dans_analyse_et_dans_fichier_excel" in f]
     
     if tr_hits:
         # Configuration Selector
@@ -374,10 +375,16 @@ elif menu == "🔍 Reference Validations":
         
         df_tr = load_validation_data(os.path.join(v_in, selected_conf))
         
-        # Determine prefix for related files
-        conf_suffix = selected_conf.replace("Intersection_RNA_Patho_", "")
-        miss_tr = [f for f in v_files if f.startswith("Missing_RNA_Patho") and conf_suffix in f]
-        extra_tr = [f for f in v_files if f.startswith("Extras_RNA_Patho") and conf_suffix in f]
+        # Determine prefix for related files (robustly)
+        if selected_conf.startswith("Intersection_RNA_Patho_"):
+            conf_suffix = selected_conf.replace("Intersection_RNA_Patho_", "")
+            miss_tr = [f for f in v_files if f.startswith("Missing_RNA_Patho") and conf_suffix in f]
+            extra_tr = [f for f in v_files if f.startswith("Extras_RNA_Patho") and conf_suffix in f]
+        else:
+            # Old naming convention fallback
+            conf_suffix = selected_conf.split("_")[-1].replace(".csv", "")
+            miss_tr = [f for f in v_files if "Genes_absents_dans_analyse" in f]
+            extra_tr = [f for f in v_files if "présents_dans_analyse_mais_absents_du_fichier_excel" in f]
         
         n_common = len(df_tr) if df_tr is not None else 0
         n_miss = len(load_validation_data(os.path.join(v_in, miss_tr[0]))) if miss_tr else 0
@@ -391,7 +398,7 @@ elif menu == "🔍 Reference Validations":
         c1.metric("Common Hits", n_common, help="Found in both paper and your analysis")
         c2.metric("Missing (Paper)", n_miss, help="In paper but not in your analysis")
         c3.metric("Extras (Analysis)", n_extra, help="Novel hits in your analysis only")
-        c4.metric("Global Match Rate", f"{(n_common/union*100):.1f}%" if union > 0 else "0%", help="Jaccard Index (Intersection over Union)")
+        c4.metric("Matching Rate", f"{(n_common/union*100):.1f}%" if union > 0 else "0%", help="Jaccard Index (Intersection over Union)")
         
         st.markdown(f"**Sensitivity (Recall):** `{(n_common/total_ref*100):.1f}%` of published genes recovered.")
         with st.expander("Show RNA Overlap"): st.dataframe(df_tr)
@@ -406,14 +413,19 @@ elif menu == "🔍 Reference Validations":
     
     # Re-scan Validations folder to see new results
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
-    p_hits = [f for f in v_files if f.startswith("Intersection_Protein_Patho")]
+    p_hits = [f for f in v_files if f.startswith("Intersection_Protein_Patho") or f.startswith("Proteines_dans_analyse_et_dans_fichier_excel")]
     if p_hits:
         selected_p = st.selectbox("Select Protein Analysis Output", p_hits)
         df_i = load_validation_data(os.path.join(v_in, selected_p))
         
-        p_suffix = selected_p.replace("Intersection_Protein_Patho_", "")
-        miss_p = [f for f in v_files if f.startswith("Missing_Protein_Patho") and p_suffix in f]
-        extra_p = [f for f in v_files if f.startswith("Extras_Protein_Patho") and p_suffix in f]
+        if selected_p.startswith("Intersection_Protein_Patho_"):
+            p_suffix = selected_p.replace("Intersection_Protein_Patho_", "")
+            miss_p = [f for f in v_files if f.startswith("Missing_Protein_Patho") and p_suffix in f]
+            extra_p = [f for f in v_files if f.startswith("Extras_Protein_Patho") and p_suffix in f]
+        else:
+            # Fallback
+            miss_p = [f for f in v_files if "absentes_dans_analyse" in f and "Proteines" in f]
+            extra_p = [f for f in v_files if "du_fichier_excel" in f and "Proteines" in f and "absente" in f]
         
         n_c = len(df_i) if df_i is not None else 0
         n_m = len(load_validation_data(os.path.join(v_in, miss_p[0]))) if miss_p else 0
@@ -427,7 +439,7 @@ elif menu == "🔍 Reference Validations":
         c1.metric("Common Hits", n_c, help="Proteins found in both paper and your analysis")
         c2.metric("Missing (Paper)", n_m, help="In paper but not in your analysis")
         c3.metric("Extras (Analysis)", n_e, help="Novel hits in your analysis only")
-        c4.metric("Global Match Rate", f"{(n_c/union_p*100):.1f}%" if union_p > 0 else "0%", help="Jaccard Index (Intersection over Union)")
+        c4.metric("Matching Rate", f"{(n_c/union_p*100):.1f}%" if union_p > 0 else "0%", help="Jaccard Index (Intersection over Union)")
         
         st.markdown(f"**Sensitivity (Recall):** `{(n_c/total_p_ref*100):.1f}%` of published proteins recovered.")
         with st.expander("Show Protein Overlap"): st.dataframe(df_i)
