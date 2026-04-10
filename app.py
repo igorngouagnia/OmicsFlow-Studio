@@ -367,10 +367,17 @@ elif menu == "🔍 Reference Validations":
     
     v_files = os.listdir(v_in) if os.path.exists(v_in) else []
     tr_hits = [f for f in v_files if f.startswith("Intersection_RNA_Patho")]
+    
     if tr_hits:
-        df_tr = load_validation_data(os.path.join(v_in, tr_hits[0]))
-        miss_tr = [f for f in v_files if f.startswith("Missing_RNA_Patho")]
-        extra_tr = [f for f in v_files if f.startswith("Extras_RNA_Patho")]
+        # Configuration Selector
+        selected_conf = st.selectbox("Select RNA Analysis Configuration", tr_hits, help="Multiple analyses might exist (Standard vs Alternative References)")
+        
+        df_tr = load_validation_data(os.path.join(v_in, selected_conf))
+        
+        # Determine prefix for related files
+        conf_suffix = selected_conf.replace("Intersection_RNA_Patho_", "")
+        miss_tr = [f for f in v_files if f.startswith("Missing_RNA_Patho") and conf_suffix in f]
+        extra_tr = [f for f in v_files if f.startswith("Extras_RNA_Patho") and conf_suffix in f]
         
         n_common = len(df_tr) if df_tr is not None else 0
         n_miss = len(load_validation_data(os.path.join(v_in, miss_tr[0]))) if miss_tr else 0
@@ -378,12 +385,13 @@ elif menu == "🔍 Reference Validations":
         
         total_ref = n_common + n_miss
         total_ana = n_common + n_extra
+        union = n_common + n_miss + n_extra # Jaccard Union
         
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Common Hits", n_common, help="Found in both paper and your analysis")
         c2.metric("Missing (Paper)", n_miss, help="In paper but not in your analysis")
         c3.metric("Extras (Analysis)", n_extra, help="Novel hits in your analysis only")
-        c4.metric("Novelty Rate", f"{(n_extra/total_ana*100):.1f}%" if total_ana > 0 else "0%")
+        c4.metric("Global Match Rate", f"{(n_common/union*100):.1f}%" if union > 0 else "0%", help="Jaccard Index (Intersection over Union)")
         
         st.markdown(f"**Sensitivity (Recall):** `{(n_common/total_ref*100):.1f}%` of published genes recovered.")
         with st.expander("Show RNA Overlap"): st.dataframe(df_tr)
@@ -398,23 +406,26 @@ elif menu == "🔍 Reference Validations":
     
     p_hits = [f for f in v_files if f.startswith("Intersection_Protein_Patho")]
     if p_hits:
-        # Use latest selection or E18.5/2w/7w fallback
-        df_i = load_validation_data(os.path.join(v_in, p_hits[-1]))
-        miss_p = [f for f in v_files if f.startswith("Missing_Protein_Patho")]
-        extra_p = [f for f in v_files if f.startswith("Extras_Protein_Patho")]
+        selected_p = st.selectbox("Select Protein Analysis Output", p_hits)
+        df_i = load_validation_data(os.path.join(v_in, selected_p))
+        
+        p_suffix = selected_p.replace("Intersection_Protein_Patho_", "")
+        miss_p = [f for f in v_files if f.startswith("Missing_Protein_Patho") and p_suffix in f]
+        extra_p = [f for f in v_files if f.startswith("Extras_Protein_Patho") and p_suffix in f]
         
         n_c = len(df_i) if df_i is not None else 0
-        n_m = len(load_validation_data(os.path.join(v_in, miss_p[-1]))) if miss_p else 0
-        n_e = len(load_validation_data(os.path.join(v_in, extra_p[-1]))) if extra_p else 0
+        n_m = len(load_validation_data(os.path.join(v_in, miss_p[0]))) if miss_p else 0
+        n_e = len(load_validation_data(os.path.join(v_in, extra_p[0]))) if extra_p else 0
         
         total_p_ref = n_c + n_m
         total_p_ana = n_c + n_e
+        union_p = n_c + n_m + n_e
         
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Common Hits", n_c)
         c2.metric("Missing (Paper)", n_m)
         c3.metric("Extras (Analysis)", n_e)
-        c4.metric("Novelty Rate", f"{(n_e/total_p_ana*100):.1f}%" if total_p_ana > 0 else "0%")
+        c4.metric("Global Match Rate", f"{(n_c/union_p*100):.1f}%" if union_p > 0 else "0%")
         
         st.markdown(f"**Sensitivity (Recall):** `{(n_c/total_p_ref*100):.1f}%` of published proteins recovered.")
         with st.expander("Show Protein Overlap"): st.dataframe(df_i)
