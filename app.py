@@ -404,6 +404,8 @@ elif menu == "🔍 Reference Validations":
             if run_script("Proteo Validation", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_papier_Cohorte_A.py"), "Validations", {"OMICS_REF_FILE": ref_p}):
                 st.session_state['val_prot_done'] = True
     
+    # Re-scan Validations folder to see new results
+    v_files = os.listdir(v_in) if os.path.exists(v_in) else []
     p_hits = [f for f in v_files if f.startswith("Intersection_Protein_Patho")]
     if p_hits:
         selected_p = st.selectbox("Select Protein Analysis Output", p_hits)
@@ -422,10 +424,10 @@ elif menu == "🔍 Reference Validations":
         union_p = n_c + n_m + n_e
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Common Hits", n_c)
-        c2.metric("Missing (Paper)", n_m)
-        c3.metric("Extras (Analysis)", n_e)
-        c4.metric("Global Match Rate", f"{(n_c/union_p*100):.1f}%" if union_p > 0 else "0%")
+        c1.metric("Common Hits", n_c, help="Proteins found in both paper and your analysis")
+        c2.metric("Missing (Paper)", n_m, help="In paper but not in your analysis")
+        c3.metric("Extras (Analysis)", n_e, help="Novel hits in your analysis only")
+        c4.metric("Global Match Rate", f"{(n_c/union_p*100):.1f}%" if union_p > 0 else "0%", help="Jaccard Index (Intersection over Union)")
         
         st.markdown(f"**Sensitivity (Recall):** `{(n_c/total_p_ref*100):.1f}%` of published proteins recovered.")
         with st.expander("Show Protein Overlap"): st.dataframe(df_i)
