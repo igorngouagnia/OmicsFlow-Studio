@@ -74,7 +74,7 @@ with st.sidebar:
     st.divider()
     if st.button("📦 DOWNLOAD ENTIRE SESSION (ZIP)"):
         zip_p = os.path.join(BASE_DIR, "OmicsFlow_Results.zip")
-        shutil.make_archive(zip_path.replace(".zip", ""), 'zip', DATA_DIR)
+        shutil.make_archive(zip_p.replace(".zip", ""), 'zip', DATA_DIR)
         with open(zip_p, "rb") as f: st.download_button("Download ZIP", f, file_name="OmicsFlow_Results.zip")
     st.divider()
     perspective = st.radio("Perspective", ["Patho", "Rescue"])
