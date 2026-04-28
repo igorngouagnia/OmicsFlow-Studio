@@ -1,10 +1,18 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import os
-import shutil
-from datetime import datetime
+try:
+    import streamlit as st
+    import pandas as pd
+    import numpy as np
+    import plotly.express as px
+    import os
+    import shutil
+    from datetime import datetime
+except Exception as e:
+    import streamlit as st
+    st.error(f"Erreur d'importation : {e}")
+    st.stop()
+
+# Wrap the rest in a try-except to see what's happening
+try:
 
 # ==========================================
 # DESIGN CONFIGURATION (PREMIUM DARK BLUE)
@@ -185,3 +193,4 @@ elif menu == "🔍 Reference Validations":
     with p_col2:
         st.write("**Case: 7 Weeks**")
         st.markdown("<div class='metric-box'><div class='metric-label'>Matching Rate</div><div class='metric-value'>94.8%</div></div>", unsafe_allow_html=True)
+except Exception as e: st.error(f'Critical App Error: {e}'); st.exception(e) 
