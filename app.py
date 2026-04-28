@@ -128,9 +128,15 @@ elif "Proteomics" in menu:
         with open(os.path.join(cat_dir, "metadata.tsv"), "wb") as f: f.write(p_m.getbuffer())
     if p_g:
         with open(os.path.join(cat_dir, "proteinGroups.tsv"), "wb") as f: f.write(p_g.getbuffer())
-    if st.button("🚀 RUN PROTEOMICS"):
-        run_pipeline_safe("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya.py"), "Protéomique", {"OMICS_IN_DIR": cat_dir})
-        run_pipeline_safe("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya_R.R"), "Protéomique", {"OMICS_IN_DIR": cat_dir})
+    
+    st.divider()
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("🚀 RUN PYTHON PIPELINE (Supriya)"):
+            run_pipeline_safe("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya.py"), "Protéomique", {"OMICS_IN_DIR": cat_dir})
+    with col_b:
+        if st.button("🚀 RUN R PIPELINE (Supriya)"):
+            run_pipeline_safe("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya_R.R"), "Protéomique", {"OMICS_IN_DIR": cat_dir})
 
 elif "Metabolomics" in menu:
     st.title("Metabolomics Engine")
