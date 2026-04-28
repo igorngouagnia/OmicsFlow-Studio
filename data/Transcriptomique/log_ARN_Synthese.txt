@@ -1,0 +1,15 @@
+=== LOG ANALYSE TRANSCRIPTOMIQUE V3 ===
+
+COHORTE A : Patho=1415, Rescue=364, Ref=WT
+
+COHORTE B : Patho=2124, Rescue=1582, Ref=WT_treated
+
+COHORTE C : Patho=1139, Rescue=14, Ref=WT
+
+COHORTE D : Patho=618, Rescue=184, Ref=WT_treated
+
+COHORTE E : Patho=1369, Rescue=528, Ref=WT
+
+COHORTE F : Patho=547, Rescue=179, Ref=WT
+
+COHORTE G : Patho=1155, Rescue=67, Ref=WT

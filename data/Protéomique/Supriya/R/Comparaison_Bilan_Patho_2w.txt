@@ -1,0 +1,12 @@
+=== Bilan Comparaison R vs Supriya (Reference) pour 2w ===
+- Implémente le filtre 10% valeurs manquantes per condition
+- (R) VSN + Limma  ou  (Python) Log2 + Median Center + t-test/BH
+Gènes significatifs dans la référence (Supriya) : 606
+Gènes significatifs dans notre analyse R : 749
+Intersection (Gènes communs) : 179
+
+---> Pourcentage d'intersection (sur réf.) : 29.54%
+---> Pourcentage d'intersection (sur loc.) : 23.90%
+
+Gènes uniquement dans notre analyse (570 gènes)
+Gènes uniquement dans la référence (427 gènes)

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport d'Analyse - Pipeline Rescue v3.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Lora:ital,wght@0,400;0,700;1,400&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --brand: #003a5d;
+            --accent: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg-soft: #fcfdfe;
+            --text-main: #27303f;
+            --sidebar-w: 300px;
+        }
+
+        * { box-sizing: border-box; }
+        body { background-color: var(--bg-soft); margin: 0; font-family: 'Outfit', sans-serif; color: var(--text-main); display: flex; }
+
+        .sidebar { 
+            width: var(--sidebar-w); height: 100vh; background: var(--brand); 
+            position: fixed; left: 0; top: 0; padding: 40px 25px; 
+            color: white; overflow-y: auto; z-index: 100;
+        }
+        .sidebar h1 { font-size: 1.2rem; color: var(--accent); margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; }
+        .nav-group { margin-bottom: 2rem; }
+        .nav-group-title { font-size: 0.75rem; text-transform: uppercase; color: rgba(255,255,255,0.4); letter-spacing: 1px; margin-bottom: 0.5rem; }
+        .nav-item { display: block; color: white; text-decoration: none; padding: 10px 0; font-size: 0.95rem; opacity: 0.8; transition: 0.3s; }
+        .nav-item:hover { opacity: 1; color: var(--accent); padding-left: 10px; }
+
+        .content { margin-left: var(--sidebar-w); padding: 60px 80px; width: 100%; max-width: 1100px; }
+
+        header { margin-bottom: 4rem; border-bottom: 2px solid #edf2f7; padding-bottom: 2rem; }
+        header h1 { font-family: 'Lora', serif; font-size: 2.8rem; color: var(--brand); margin: 0; }
+        .abstract { font-size: 1.2rem; color: #64748b; margin-top: 1rem; font-style: italic; }
+
+        .concept-card { 
+            background: white; border-radius: 16px; padding: 40px; 
+            margin-bottom: 50px; box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            border: 1px solid #f1f5f9;
+        }
+        .concept-card h2 { font-family: 'Lora', serif; font-size: 1.8rem; color: var(--brand); margin-top: 0; }
+        
+        .badge { padding: 4px 12px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; background: #e2e8f0; }
+        .badge-patho { background: #fee2e2; color: var(--danger); }
+        .badge-rescue { background: #dcfce7; color: var(--accent); }
+
+        .explanation-block { background: #f8fafc; border-left: 4px solid var(--accent); padding: 25px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        .math-block { text-align: center; padding: 30px; background: #f1f5f9; border-radius: 12px; margin: 25px 0; font-size: 1.1rem; line-height: 1.6; }
+        .python-snippet { font-family: 'Fira Code', monospace; font-size: 0.85rem; color: #334155; background: #f8fafc; padding: 15px; border-radius: 6px; display: block; white-space: pre; border: 1px solid #e2e8f0; }
+
+        .deseq-note {
+            background: #fff7ed; border: 1px dashed #f97316; padding: 20px; border-radius: 8px; margin-top: 20px;
+        }
+
+        .cohort-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
+        .cohort-table th { text-align: left; padding: 12px; background: var(--brand); color: white; }
+        .cohort-table td { padding: 12px; border-bottom: 1px solid #edf2f7; }
+
+        .step-label { color: var(--accent); font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+
+        .workflow-step { margin-bottom: 25px; display: flex; gap: 20px; align-items: flex-start; }
+        .step-num { background: var(--brand); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: bold; }
+
+        .formula-legend { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+        .legend-item { display: flex; align-items: center; gap: 10px; }
+        .legend-item b { color: var(--brand); min-width: 30px; display: inline-block; }
+
+        .output-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 20px 0; }
+        .output-item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; font-size: 0.9rem; }
+        .output-item i { color: var(--brand); margin-right: 8px; }
+
+        @media (max-width: 900px) {
+            .sidebar { display: none; }
+            .content { margin-left: 0; padding: 30px; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="sidebar">
+    <h1>Analyse Transcriptomique</h1>
+    <div class="nav-group">
+        <div class="nav-group-title">Origine des Données</div>
+        <a href="#biology" class="nav-item">Du Vivant aux Counts</a>
+        <a href="#metadata" class="nav-item">Structure des Données</a>
+    </div>
+    <div class="nav-group">
+        <div class="nav-group-title">Le Pipeline</div>
+        <a href="#matching" class="nav-item">Matching & Nettoyage</a>
+        <a href="#cpm" class="nav-item">Normalisation CPM</a>
+        <a href="#calibration" class="nav-item">Le Choix du Contrôle</a>
+    </div>
+    <div class="nav-group">
+        <div class="nav-group-title">Statistiques</div>
+        <a href="#averaging" class="nav-item">Moyennes & Pseudocount</a>
+        <a href="#welch" class="nav-item">Welch vs DESeq2</a>
+        <a href="#logic" class="nav-item">Extraction des DEG</a>
+        <a href="#outputs" class="nav-item">Structure des Exports</a>
+    </div>
+</nav>
+
+<main class="content">
+    <header id="intro">
+        <div class="step-label">Rapport de Synthèse - Stage CRBS</div>
+        <h1>Évaluation de l'Effet Rescue</h1>
+        <p class="abstract">Ce rapport documente la méthodologie automatisée utilisée pour identifier les signatures pathologiques et évaluer l'efficacité de corrections thérapeutiques sur 7 cohortes ARN-Seq.</p>
+    </header>
+
+    <!-- SECTION BIOLOGIE -->
+    <section id="biology" class="concept-card">
+        <h2>0. Origine des fichiers bruts : Du vivant au "Raw Count"</h2>
+        <p>Avant d'arriver dans notre script Python sous forme de fichiers <code>.txt</code>, les données traversent le cycle du dogme central de la biologie moléculaire.</p>
+        
+        <div class="workflow-step">
+            <div class="step-num">1</div>
+            <div>
+                <strong>Transcription (ADN &rarr; ARNm)</strong> : Dans les cellules musculaires, les gènes (ADN) sont copiés en <strong>ARN messagers</strong>. C'est cette étape que nous capturons. Plus un gène est actif, plus il y a d'ARNm correspondant.
+            </div>
+        </div>
+
+        <div class="workflow-step">
+            <div class="step-num">!</div>
+            <div style="color: #64748b;">
+                <strong>Note sur la Traduction (ARNm &rarr; Protéine)</strong> : En temps normal, l'ARNm sort du noyau pour être traduit en protéines par les ribosomes. Bien que nous ne mesurions pas directement les protéines (protéomique), nous utilisons l'ARN comme indicateur du flux de production cellulaire.
+            </div>
+        </div>
+
+        <div class="workflow-step">
+            <div class="step-num">2</div>
+            <div>
+                <strong>Séquençage (RNA-Seq)</strong> : Les ARNm extraits sont fragmentés et convertis en "bibliothèques" séquençables. Le séquenceur génère des millions de lectures courtes (<strong>Reads</strong>).
+            </div>
+        </div>
+
+        <div class="workflow-step">
+            <div class="step-num">3</div>
+            <div>
+                <strong>Mapping (Alignement)</strong> : Bio-informatiquement, on aligne ces Reads sur le <strong>Génome de Référence</strong> (souris). C'est l'étape de localisation : "A quel gène appartient cette séquence ?".
+            </div>
+        </div>
+
+        <div class="workflow-step">
+            <div class="step-num">4</div>
+            <div>
+                <strong>Quantification (Gene Count)</strong> : On compte le nombre de Reads alignés sur chaque gène.
+                <div class="explanation-block" style="margin-top:10px;">
+                    <strong>Résultat :</strong> On obtient la <strong>Matrice de Comptage Brut (Raw Counts)</strong> issue du traitement bioinformatique. Chaque chiffre représente l'abondance d'un transcrit spécifique dans un échantillon donné.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 1 : OBJECTIF -->
+    <section class="concept-card">
+        <h2>1. Ce que nous cherchons à mesurer</h2>
+        <p>L'objectif central est l'extraction des <strong>Gènes Différentiellement Exprimés (DEG)</strong> pour deux signatures clés :</p>
+        <ul>
+            <li><strong>La Signature Pathologique</strong> : Définie par le contraste entre le groupe malade (Disease) et le groupe sain de référence.</li>
+            <li><strong>L'Effet Rescue</strong> : Définie par les gènes dont l'expression est corrigée (retour vers le niveau sain) suite au traitement.</li>
+        </ul>
+        <div class="explanation-block">
+            <strong>Groupes biologiques analysés :</strong> WT (Sain), WT Treated (Sain traité), Disease (Malade), Rescue (Malade traité).
+        </div>
+    </section>
+
+    <!-- SECTION 2 : METADATA -->
+    <section id="metadata" class="concept-card">
+        <h2>2. L'intelligence du fichier Metadata</h2>
+        <p>Le script ne peut pas "deviner" le contenu des fichiers de comptage. Le fichier <code>metadata.txt</code> est le cerveau de l'analyse. Il permet de regrouper les échantillons par cohorte et par groupe biologique afin de définir précisément les contrastes statistiques pour l'extraction des DEG.</p>
+        
+        <h3>Correspondance Fichiers/Cohortes</h3>
+        <table class="cohort-table">
+            <thead>
+                <tr><th>ID</th><th>Pathologie / Gène</th><th>Source de données</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>A, B, C</td><td>MTM1</td><td>GSE160079, 81, 83 (Matrices de comptage raw)</td></tr>
+                <tr><td>D, F</td><td>BIN1</td><td>GSE160077, GSE282489</td></tr>
+                <tr><td>E, G</td><td>DNM2</td><td>GSE160078 (Excel), GSE282489</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 3 : MATCHING -->
+    <section id="matching" class="concept-card">
+        <h2>3. Nettoyage et "Matching" des échantillons</h2>
+        <p>Les noms des échantillons dans les fichiers de données (ex: <code>WT-1_S1</code>) diffèrent souvent de ceux répertoriés dans les tableaux de suivi (ex: <code>WT 1</code>). Le script utilise une <strong>normalisation textuelle stricte</strong> :</p>
+        <code class="python-snippet"># On retire les points, underscores, espaces et on passe en minuscule
+nom_propre = s.replace('.','').replace('_','').replace(' ','').lower()</code>
+        <p>Cela garantit que l'extraction des DEG repose sur les bons échantillons et qu'aucun individu n'est perdu à cause d'une faute de frappe.</p>
+    </section>
+
+    <!-- SECTION 4 : CPM -->
+    <section id="cpm" class="concept-card">
+        <h2>4. Pourquoi normaliser en CPM ?</h2>
+        <p>Avant d'extraire les DEG, il faut s'assurer que les variations observées ne sont pas dues à la technique. Si un échantillon a été séquencé avec 20 millions de lectures et un autre avec 40 millions, le second aura naturellement des chiffres deux fois plus hauts.</p>
+        <div class="math-block">
+            <math display="block">
+                <mi>CPM</mi>
+                <mo>=</mo>
+                <mfrac>
+                    <mi>Lectures du gène</mi>
+                    <mi>Total des lectures de l'échantillon</mi>
+                </mfrac>
+                <mo>&times;</mo>
+                <msup><mn>10</mn><mn>6</mn></msup>
+            </math>
+        </div>
+        <p>Cette étape rend les niveaux d'expression comparables entre toutes les cohortes, condition <em>sine qua non</em> pour un test statistique robuste.</p>
+    </section>
+
+    <!-- SECTION 5 : CALIBRATION -->
+    <section id="calibration" class="concept-card">
+        <h2>5. La stratégie de Calibration (Le seuil de 1%)</h2>
+        <p>Cette étape détermine quel groupe servira de référence pour définir la liste des DEG "Sain vs Malade". Le script automatise le choix pour s'adapter à la réponse biologique du traitement.</p>
+        
+        <div class="explanation-block">
+            <h4>Le calcul du choix :</h4>
+            <ol>
+                <li>Le script compare d'abord le groupe <strong>WT Treated</strong> au groupe <strong>WT</strong>.</li>
+                <li>Il compte combien de gènes sont "déplacés" par le traitement seul (DEG avec $|Log2FC| > 1$ et $P < 0.05$).</li>
+                <li>Il calcule le ratio : <code>(Nb de gènes déplacés) / (Total gènes de la cohorte)</code>.</li>
+            </ol>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px;">
+                <h4 style="color: #166534; margin-top: 0;"><i class="fa-solid fa-check-circle"></i> Divergence < 1%</h4>
+                <p>Le traitement est considéré comme "neutre" sur le sujet sain. <strong>Le groupe WT Treated est utilisé comme référence.</strong></p>
+                <small>Cela permet d'avoir un contrôle qui a reçu la même injection que le groupe Rescue.</small>
+            </div>
+            <div style="background: #fff1f2; border: 1px solid #fecdd3; padding: 20px; border-radius: 12px;">
+                <h4 style="color: #991b1b; margin-top: 0;"><i class="fa-solid fa-exclamation-triangle"></i> Divergence &ge; 1%</h4>
+                <p>Le traitement induit une réponse propre sur le sain. <strong>Le groupe WT pur est conservé comme référence.</strong></p>
+                <small>On évite ainsi de "fausser" la ligne de base avec les effets secondaires du traitement.</small>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 30px;">Signification mathématique du Log2FC</h3>
+        <p>Pour quantifier ces divergences (et identifier les DEG), nous utilisons le <strong>Log2 Fold Change</strong>. Le seuil de 1 garantit un changement d'amplitude biologique réelle :</p>
+        <div class="math-block">
+            <strong>Doublement (Ratio 2) :</strong> <math>log<sub>2</sub>(2) = 1</math><br>
+            <strong>Division par 2 (Ratio 0.5) :</strong> <math>log<sub>2</sub>(0.5) = -1</math>
+        </div>
+        <p>L'utilisation de la base 2 rend les variations symétriques : une hausse d'un facteur 2 (+1) est visuellement comparable à une baisse d'un facteur 2 (-1).</p>
+    </section>
+
+    <!-- SECTION 6 : AVERAGING -->
+    <section id="averaging" class="concept-card">
+        <h2>6. Agrégation et Pseudocount</h2>
+        <p>Pour chaque gène, nous calculons la moyenne d'expression par groupe biologique (WT, Disease, Rescue, etc.).</p>
+        <div class="explanation-block">
+            <h4>L'astuce du Pseudocount (+0.1)</h4>
+            <p>Nous ajoutons 0.1 à chaque moyenne pour :</p>
+            <ul>
+                <li><strong>Éviter la division par zéro</strong> dans le calcul des ratios.</li>
+                <li><strong>Stabiliser le Log2FC</strong> des gènes à très faible expression, évitant ainsi des variations artificielles dues au bruit technique.</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 7 : WELCH -->
+    <section id="welch" class="concept-card">
+        <h2>7. Choix Statistique : Le T-test de Welch</h2>
+        <p>Pour déterminer si un gène est significativement différent entre deux groupes, nous utilisons le <strong>Test $t$ de Welch</strong>.</p>
+        
+        <div class="math-block">
+            <math display="block">
+                <mi>t</mi>
+                <mo>=</mo>
+                <mfrac>
+                    <mrow><msub><mover><mi>X</mi><mo>¯</mo></mover><mn>1</mn></msub><mo>-</mo><msub><mover><mi>X</mi><mo>¯</mo></mover><mn>2</mn></msub></mrow>
+                    <msqrt>
+                        <mfrac><msubsup><mi>s</mi><mn>1</mn><mn>2</mn></msubsup><msub><mi>n</mi><mn>1</mn></msub></mfrac>
+                        <mo>+</mo>
+                        <mfrac><msubsup><mi>s</mi><mn>2</mn><mn>2</mn></msubsup><msub><mi>n</mi><mn>2</mn></msub></mfrac>
+                    </msqrt>
+                </mfrac>
+            </math>
+
+            <div class="formula-legend">
+                <div class="legend-item"><b>X̄₁ , X̄₂</b> Moyennes d'expression (CPM) des deux groupes.</div>
+                <div class="legend-item"><b>s₁² , s₂²</b> Variances respectives de chaque groupe.</div>
+                <div class="legend-item"><b>n₁ , n₂</b> Nombre d'échantillons (réplicats) par groupe.</div>
+                <div class="legend-item"><b>t</b> Valeur calculée pour déterminer la p-value.</div>
+            </div>
+        </div>
+
+        <div class="explanation-block">
+            <h4>Pourquoi Welch plutôt que le test de Student classique ?</h4>
+            <p>Le test de Student classique suppose l'homoscédasticité. Or, en biologie musculaire :</p>
+            <ul>
+                <li><strong>Hétérogénéité biologique :</strong> Les souris malades présentent souvent une variabilité plus forte.</li>
+                <li><strong>Le test de Welch</strong> ajuste les degrés de liberté en fonction de la dispersion réelle de chaque groupe.</li>
+            </ul>
+        </div>
+
+        <div class="deseq-note">
+            <p><strong>Note sur DESeq2 :</strong> Bien que standard, il nécessite les comptages bruts. Ce pipeline utilise Welch sur CPM pour rester <strong>polyvalent</strong> face à des sources hétérogènes (fichiers Excel déjà normalisés).</p>
+        </div>
+    </section>
+
+    <!-- SECTION 8 : EXTRACTION -->
+    <section id="logic" class="concept-card">
+        <h2>8. Extraction des DEG</h2>
+        <p>Les gènes différentiellement exprimés sont isolés via deux filtres combinés :</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div style="border: 1px solid #fee2e2; padding: 20px; border-radius: 12px;">
+                <h4 class="badge badge-patho">Signature Patho (DEG)</h4>
+                <p>Contraste [Disease vs Référence]. Filtre : <strong>|Log2FC| > 1</strong> et <strong>P < 0.05</strong>.</p>
+            </div>
+            <div style="border: 1px solid #dcfce7; padding: 20px; border-radius: 12px;">
+                <h4 class="badge badge-rescue">Effet Rescue</h4>
+                <p>Contraste [Rescue vs Disease]. Filtre : <strong>Significatif (P < 0.05)</strong> et <strong>direction opposée</strong> à la maladie.</p>
+            </div>
+        </div>
+
+        <h3>Efficacité de la correction</h3>
+        <p>Le pourcentage de correction est le rapport entre l'amplitude du traitement et l'amplitude de la maladie :</p>
+        <div class="math-block" style="background: var(--brand); color: white;">
+            % Correction = (|Log2FC Rescue| / |Log2FC Patho|) × 100
+        </div>
+    </section>
+
+    <!-- SECTION 9 : STRUCTURE DES EXPORTS -->
+    <section id="outputs" class="concept-card">
+        <h2>9. Structure des Exports (Output)</h2>
+        <p>Pour chaque cohorte (A à G), le pipeline génère 3 fichiers <code>.csv</code> distincts pour faciliter l'analyse en aval :</p>
+        
+        <div class="output-grid">
+            <div class="output-item"><i class="fa-solid fa-file-csv"></i> <strong>Genes_Analysis_Cohort_[].csv</strong> : Tous les gènes de la cohorte avec leurs calculs.</div>
+            <div class="output-item"><i class="fa-solid fa-virus"></i> <strong>Genes_Signature_Patho_Cohort_[].csv</strong> : Uniquement la signature de la maladie.</div>
+            <div class="output-item"><i class="fa-solid fa-medkit"></i> <strong>Genes_Efficacite_Rescue_Cohort_[].csv</strong> : Uniquement les gènes corrigés par le traitement.</div>
+        </div>
+
+        <h3>Signification des colonnes :</h3>
+        <table class="cohort-table">
+            <thead>
+                <tr><th>Nom de la Colonne</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>Ensembl_Gene_ID</code></td><td>Identifiant unique du gène (ou Gene Symbol selon la source).</td></tr>
+                <tr><td><code>Moyenne_CPM_[Groupe]</code></td><td>Moyenne des comptages normalisés par million pour le groupe (WT, Treated, etc.).</td></tr>
+                <tr><td><code>Pvalue_Patho</code></td><td>P-value du test de Welch comparant Disease vs Référence (Sain).</td></tr>
+                <tr><td><code>Pvalue_Rescue</code></td><td>P-value du test de Welch comparant Rescue vs Disease.</td></tr>
+                <tr><td><code>Ref_Utilisee</code></td><td>Indique si la base de comparaison est le groupe "WT" ou "WT_treated".</td></tr>
+                <tr><td><code>Log2FC_Patho</code></td><td>Amplitude du changement induit par la maladie (en log2).</td></tr>
+                <tr><td><code>Log2FC_Rescue</code></td><td>Amplitude du changement induit par le traitement (en log2).</td></tr>
+                <tr><td><code>Significatif_Patho</code></td><td>Booléen (True/False) : Indique si le gène passe les filtres de la maladie.</td></tr>
+                <tr><td><code>Significatif_Rescue</code></td><td>Booléen (True/False) : Indique si le gène est significativement corrigé.</td></tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<footer style="margin-left: 300px; padding: 40px; text-align: center; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 0.8rem;">
+    Document méthodologique - Version 3.0 (Mars 2026)
+</footer>
+
+</body>
+</html>

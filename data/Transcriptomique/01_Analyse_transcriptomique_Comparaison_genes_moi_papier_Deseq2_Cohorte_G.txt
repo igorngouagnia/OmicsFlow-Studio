@@ -1,0 +1,18 @@
+=== RAPPORT DE COMPARAISON TRANSCRIPTOMIQUE ===
+Lecture de la Table S2 dans l'Excel...
+-> 1252 gènes uniques trouvés dans le fichier Excel (S2).
+
+Analyse de : Deseq2_Genes_Signature_Patho_Cohort_G.csv (deseq2_standard)
+   -> Créé : genes_dans_deseq2_standard_absents_dans_fichier_excel_Patho_cohorte_G.csv (26 gènes)
+   -> Créé : genes_dans_fichier_excel_absents_dans_deseq2_standard_Patho_cohorte_G.csv (5 gènes)
+
+Analyse de : Deseq2_Genes_Signature_Patho_Cohort_G_ref_WT_treated.csv (deseq2_ref_WT_treated)
+   -> Créé : genes_dans_deseq2_ref_WT_treated_absents_dans_fichier_excel_Patho_cohorte_G.csv (1563 gènes)
+   -> Créé : genes_dans_fichier_excel_absents_dans_deseq2_ref_WT_treated_Patho_cohorte_G.csv (624 gènes)
+
+Analyse de : Genes_Signature_Patho_Cohort_G.csv (python_manual)
+   -> Créé : genes_dans_python_manual_absents_dans_fichier_excel_Patho_cohorte_G.csv (469 gènes)
+   -> Créé : genes_dans_fichier_excel_absents_dans_python_manual_Patho_cohorte_G.csv (566 gènes)
+
+Traitement terminé. Les 6 fichiers ont été générés avec succès.
+Le rapport a été enregistré dans : 01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.txt

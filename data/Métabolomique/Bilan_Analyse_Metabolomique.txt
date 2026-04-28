@@ -1,0 +1,17 @@
+=== BILAN DE L'ANALYSE MÉTABOLOMIQUE MTM1 ===
+
+Nombre total de métabolites analysés : 846
+Nombre d'échantillons WT      : 8
+Nombre d'échantillons Disease : 8
+Nombre d'échantillons Rescue  : 8
+----------------------------------------
+1. SIGNATURE PATHO (Disease vs WT):
+   - Métabolites significatifs (p < 0.05) : 353
+   - Dont augmentés dans Disease : 298
+   - Dont diminués dans Disease : 55
+
+2. SIGNATURE RESCUE (Filtre Strict):
+   - Métabolites restaurés (Signif Patho ET Signif Rescue) : 303
+   - Dont inversion de signe (Restauration réelle) : 303
+
+Analyse terminée avec succès.
