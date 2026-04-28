@@ -1,0 +1,36 @@
+# 🧬 RAPPORT DE DÉPLOIEMENT : OmicsFlow Studio V2
+# Date : 2026-04-09
+# Statut : EN LIGNE (https://omicsflow-studio-mbaoweojenkjwoecr9aawr.streamlit.app/)
+
+## 1. VISION ARCHITECTURALE
+L'objectif était de transformer une série de scripts de recherche locaux en une plateforme "Cloud-Native" capable d'être utilisée par n'importe quel chercheur sans installation préalable.
+
+## 2. JALONS DE DÉVELOPPEMENT
+### A. Isolation des Sessions (Workspace-as-a-Service)
+- Problème : Les exécutions locales écrasaient les fichiers de résultats.
+- Solution : Implémentation d'un système de sessions horodatées (`Sessions/Session_YYYYMMDD_HHMMSS`). Chaque utilisateur dispose d'un espace de travail virtuel étanche.
+
+### B. Gouvernance des Données (Input Locking)
+- Sécurité : Les pipelines sont verrouillés tant que les fichiers requis (Metadata + Raw Data) ne sont pas injectés dans la mémoire de l'application via le navigateur.
+- Flexibilité : Choix dynamique des cohortes (A à G) et des moteurs statistiques (Python Pingouin vs R DEP).
+
+### C. Refactorisation pour la Portabilité (Cloud-Ready)
+- Suppression des chemins "D:\" : Migration vers `os.getcwd()` (Python) et `getwd()` (R).
+- Cloning : Création du dossier `OmicsFlow_App`, un jumeau portable prêt pour GitHub.
+- Configuration Server : Création de `requirements.txt` (Python) et `packages.txt` (R-System) pour l'autoconfiguration du serveur Linux.
+
+## 3. RÉPONSE À LA QUESTION TECHNIQUE
+Question : "Si on met les fichiers dans D:\Stage-CRBS\Stage_analyses\OmicsFlow_App, est-ce que ça va affecter l'appli ?"
+Réponse : 
+- NON, cela n'affecte pas l'application WEB en temps réel.
+- L'application Web est liée à votre dépôt GITHUB. 
+- Pour que vos changements locaux (dans OmicsFlow_App) apparaissent sur le Web, vous devez faire un "Git Push" (ou uploader les nouveaux fichiers sur l'interface GitHub).
+- Le serveur Streamlit Cloud détectera alors le changement et se mettra à jour automatiquement.
+
+## 4. PROCHAINES ÉTAPES
+- Maintenance des packages Bioconductor (DEP).
+- Ajout éventuel d'un module d'exportation PDF des rapports finaux.
+- Expansion aux analyses Single-Cell si nécessaire.
+
+-------------------------------------------------------
+Rapport généré par Antigravity - Deepmind

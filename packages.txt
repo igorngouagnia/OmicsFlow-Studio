@@ -1,0 +1,13 @@
+r-base
+r-base-dev
+libcurl4-openssl-dev
+libxml2-dev
+libssl-dev
+libharfbuzz-dev
+libfribidi-dev
+cmake
+libfftw3-dev
+r-cran-dplyr
+r-cran-readr
+r-cran-matrix
+r-cran-locfit
