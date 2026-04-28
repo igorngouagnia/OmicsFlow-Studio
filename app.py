@@ -11,7 +11,7 @@ from datetime import datetime
 import plotly.express as px
 
 # ==========================================
-# DESIGN PREMIUM DARK BLUE (IDENTIQUE CAPTURE)
+# DESIGN PREMIUM DARK BLUE
 # ==========================================
 st.set_page_config(page_title="OmicsFlow Studio", layout="wide", initial_sidebar_state="expanded")
 
@@ -19,29 +19,14 @@ st.markdown("""
 <style>
     [data-testid="stAppViewContainer"] { background-color: #0d1117; color: #c9d1d9; }
     [data-testid="stSidebar"] { background-color: #0d1117; border-right: 1px solid #30363d; }
-    
-    h1, h2 { color: #ffffff !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    h1, h2 { color: #ffffff !important; }
     h3 { color: #8b949e !important; }
-
-    /* Green execution button (as seen in screenshot) */
-    .stButton>button {
-        background-color: #238636 !important;
-        color: white !important;
-        border: 1px solid rgba(240,246,252,0.1) !important;
-        border-radius: 6px !important;
-        padding: 12px !important;
-        font-weight: 600 !important;
-        width: 100% !important;
-    }
-    
-    /* Success/Error blocks */
-    .success-box { background-color: rgba(35, 134, 54, 0.1); border: 1px solid #238636; padding: 15px; border-radius: 6px; color: #3fb950; margin-bottom: 10px; }
-    .error-box { background-color: rgba(248, 81, 73, 0.1); border: 1px solid #f85149; padding: 15px; border-radius: 6px; color: #f85149; margin-bottom: 10px; }
-
-    /* Metric Boxes (Validation) */
-    .metric-box { text-align: left; }
+    .stButton>button { background-color: #238636 !important; color: white !important; border-radius: 6px !important; padding: 12px !important; font-weight: 600 !important; width: 100% !important; }
+    .success-box { background-color: rgba(35, 134, 54, 0.1); border: 1px solid #238636; padding: 10px; border-radius: 6px; color: #3fb950; margin-bottom: 10px; }
+    .metric-box { text-align: left; margin-top: 10px; }
     .metric-label { font-size: 0.85rem; color: #8b949e; }
     .metric-value { font-size: 2.2rem; font-weight: 800; color: #58a6ff; }
+    .grayed-out { opacity: 0.2; filter: grayscale(100%); pointer-events: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,121 +38,152 @@ for sub in ["Transcriptomique", "Protéomique", "Métabolomique", "Validations"]
 
 COHORT_MAPPING = {'A':"counts_mtm1_cohort.csv",'B':"counts_bin1_cohort.csv",'C':"counts_dnm2_cohort.csv",'D':"GSE160078_Raw_gene_counts_matrix_Cohort_MTM1_Updated-07-01-2024.xlsx",'E':"GSE160078_Raw_gene_counts_matrix_Cohort_DNM2_Updated-07-01-2024.xlsx",'F':"GSE282489_raw_counts_bin1_cohort.txt",'G':"GSE282489_raw_counts_dnm2_cohort.txt"}
 
-# --- RUNNER ---
-def run_and_log(name, script, out_dir, env_extra=None):
-    gc.collect()
-    env = os.environ.copy()
-    env["OMICS_OUT_DIR"] = out_dir
-    if env_extra: env.update(env_extra)
-    cmd = ["Rscript", script] if script.endswith(".R") else [sys.executable, script]
-    res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    if res.returncode == 0:
-        st.markdown(f"<div class='success-box'>{name} Analysis Completed Successfully.</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div class='error-box'>Error in {name} Analysis.</div>", unsafe_allow_html=True)
-    with st.expander("Logs"): st.code(res.stdout + "\n" + res.stderr)
+# --- PARSING ---
+def get_metrics_rna(filepath):
+    if not os.path.exists(filepath): return "-", "-", "-", "-"
+    with open(filepath, "r", encoding="utf-8") as f: content = f.read()
+    h = re.search(r"Intersection_RNA_Patho_deseq2_standard.csv \((\d+) gènes\)", content)
+    m = re.search(r"Missing_RNA_Patho_deseq2_standard.csv \((\d+) gènes\)", content)
+    e = re.search(r"Extras_RNA_Patho_deseq2_standard.csv \((\d+) gènes\)", content)
+    v_h = int(h.group(1)) if h else 0
+    v_m = int(m.group(1)) if m else 0
+    rate = f"{(v_h / (v_h + v_m) * 100):.1f}" if (v_h + v_m) > 0 else "0"
+    return str(v_h), str(v_m), (e.group(1) if e else "0"), rate
+
+def get_metrics_proteo(filepath):
+    if not os.path.exists(filepath): return "-", "-", "-", "-"
+    with open(filepath, "r", encoding="utf-8") as f: content = f.read()
+    it = re.search(r"Intersection \(Gènes communs\) : (\d+)", content)
+    rt = re.search(r"---> Pourcentage d'intersection \(sur réf.\) : ([\d.]+)%", content)
+    return (it.group(1) if it else "0"), "-", "-", (rt.group(1) if rt else "0")
 
 # ==========================================
-# SIDEBAR
+# SIDEBAR & MENU
 # ==========================================
 with st.sidebar:
     st.title("OmicsFlow")
-    menu = st.radio("Main Navigation", ["📊 Global Analytics Dashboard", "🧪 Transcriptomics Pipeline", "🧪 Proteomics Pipeline", "🧪 Metabolomics Pipeline", "🔍 Reference Validations"])
-    if st.button("📦 DOWNLOAD ENTIRE SESSION (ZIP)"):
-        zip_p = os.path.join(BASE_DIR, "Results.zip")
-        shutil.make_archive(zip_p.replace(".zip", ""), 'zip', SESSION_DIR)
-        with open(zip_p, "rb") as f: st.download_button("Download ZIP", f, file_name="OmicsFlow_Results.zip")
+    menu = st.radio("Main Navigation", ["📊 Dashboard", "🧪 Transcriptomics Pipeline", "🧪 Proteomics Pipeline", "🧪 Metabolomics Pipeline", "🔍 Reference Validations"])
+    st.divider()
+    perspective = st.radio("Perspective", ["Patho", "Rescue"])
 
 # ==========================================
-# TRANSCRIPTOMICS (MATCHING SCREENSHOT)
+# DASHBOARD
 # ==========================================
-if menu == "🧪 Transcriptomics Pipeline":
-    st.title("RNA-Seq Analysis (DESeq2)")
-    cat_dir = os.path.join(SESSION_DIR, "Transcriptomique")
-    
-    st.subheader("Step 1: Resource Loading")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**Metadata Management**")
-        m = st.file_uploader("Upload metadata.txt", key="rna_meta")
-        if m: 
-            with open(os.path.join(cat_dir, "metadata.txt"), "wb") as f: f.write(m.getbuffer())
-            st.markdown("<div class='success-box' style='padding:5px;'>Metadata Uploaded.</div>", unsafe_allow_html=True)
-    with c2:
-        st.markdown("**Count Matrix Selection**")
-        cid = st.selectbox("Assign to Cohort ID:", ["A","B","C","D","E","F","G"])
-        c = st.file_uploader(f"Upload counts for Cohort {cid}", key="rna_counts")
-        if c: 
-            with open(os.path.join(cat_dir, COHORT_MAPPING[cid]), "wb") as f: f.write(c.getbuffer())
-
-    st.subheader("Step 2: Analysis Execution")
-    if st.button("🚀 EXECUTE DESEQ2 WORKFLOW"):
-        run_and_log("Transcriptomics", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py"), cat_dir, {"OMICS_IN_DIR": cat_dir})
-
-# ==========================================
-# PROTEOMICS (MATCHING STRUCTURE)
-# ==========================================
-elif menu == "🧪 Proteomics Pipeline":
-    st.title("Proteomics Analysis")
-    cat_dir = os.path.join(SESSION_DIR, "Protéomique")
-    
-    st.subheader("Step 1: Resource Loading")
-    c1, c2 = st.columns(2)
-    with c1:
-        pm = st.file_uploader("Upload metadata.tsv", key="p_meta")
-        if pm: 
-            with open(os.path.join(cat_dir, "metadata.tsv"), "wb") as f: f.write(pm.getbuffer())
-            st.success("Metadata Uploaded.")
-    with c2:
-        pg = st.file_uploader("Upload proteinGroups.tsv", key="p_groups")
-        if pg: 
-            with open(os.path.join(cat_dir, "proteinGroups.tsv"), "wb") as f: f.write(pg.getbuffer())
-            st.success("Protein Groups Uploaded.")
-
-    st.subheader("Step 2: Analysis Execution")
-    ca, cb = st.columns(2)
-    with ca:
-        if st.button("🚀 RUN PYTHON PIPELINE (Supriya)"):
-            run_and_log("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya.py"), cat_dir, {"OMICS_IN_DIR": cat_dir})
-    with cb:
-        if st.button("🚀 RUN R PIPELINE (Supriya)"):
-            run_and_log("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya_R.R"), cat_dir, {"OMICS_IN_DIR": cat_dir})
-
-# ==========================================
-# METABOLOMICS (MATCHING STRUCTURE)
-# ==========================================
-elif menu == "🧪 Metabolomics Pipeline":
-    st.title("Metabolomics Analysis")
-    cat_dir = os.path.join(SESSION_DIR, "Métabolomique")
-    
-    st.subheader("Step 1: Resource Loading")
-    m_file = st.file_uploader("Upload Metabolomics Data (CSV/XLSX)")
-    if m_file:
-        with open(os.path.join(cat_dir, m_file.name), "wb") as f: f.write(m_file.getbuffer())
-        st.success("Data Uploaded.")
-
-    st.subheader("Step 2: Analysis Execution")
-    if st.button("🚀 EXECUTE METABOLOMICS WORKFLOW"):
-        run_and_log("Metabolomics", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), cat_dir, {"OMICS_IN_DIR": cat_dir})
-
-# ==========================================
-# DASHBOARD & VALIDATIONS (REMAINS DYNAMIC)
-# ==========================================
-elif menu == "📊 Global Analytics Dashboard":
+if menu == "📊 Dashboard":
     st.title("📊 Multi-Omics Studio")
-    # (Dynamically counts and shows volcano plots as previously implemented)
     view = st.selectbox("Switch Omics View", ["Transcriptomique", "Protéomique", "Métabolomique"])
     cat_dir = os.path.join(SESSION_DIR, view)
     files = [f for f in (os.listdir(cat_dir) if os.path.exists(cat_dir) else []) if f.endswith(".csv")]
-    if files:
-        f_sel = st.selectbox("Select Cohort File", files)
-        df = pd.read_csv(os.path.join(cat_dir, f_sel))
-        lfc = [c for c in df.columns if "Log2FC" in c or "logFC" in c][0]
-        pval = [c for c in df.columns if "Pval" in c or "adj.P" in c][0]
-        df['-log10p'] = -np.log10(pd.to_numeric(df[pval], errors='coerce').replace(0, 1e-300))
-        st.plotly_chart(px.scatter(df, x=lfc, y='-log10p', color=(df[pval]<0.05), template="plotly_dark"), use_container_width=True)
+    c_l, c_r = st.columns([3, 1])
+    with c_l:
+        if files:
+            f_sel = st.selectbox("Select Cohort File", files)
+            df = pd.read_csv(os.path.join(cat_dir, f_sel))
+            lfc = [c for c in df.columns if "Log2FC" in c or "logFC" in c][0]
+            pval = [c for c in df.columns if "Pval" in c or "adj.P" in c][0]
+            df['-log10p'] = -np.log10(pd.to_numeric(df[pval], errors='coerce').replace(0, 1e-300))
+            st.plotly_chart(px.scatter(df, x=lfc, y='-log10p', color=(df[pval]<0.05), template="plotly_dark"), use_container_width=True)
+    with c_r:
+        st.subheader("Targets Summary")
+        st.write("Results based on selected data.")
 
+# ==========================================
+# PIPELINES (STEP 1 & STEP 2)
+# ==========================================
+elif "Transcriptomics" in menu:
+    st.title("RNA-Seq Analysis (DESeq2)")
+    cat_dir = os.path.join(SESSION_DIR, "Transcriptomique")
+    st.subheader("Step 1: Resource Loading")
+    col1, col2 = st.columns(2)
+    with col1:
+        m = st.file_uploader("Upload metadata.txt")
+        if m: 
+            with open(os.path.join(cat_dir, "metadata.txt"), "wb") as f: f.write(m.getbuffer())
+            st.markdown("<div class='success-box'>Metadata Uploaded.</div>", unsafe_allow_html=True)
+    with col2:
+        cid = st.selectbox("Cohort ID:", ["A","B","C","D","E","F","G"])
+        c = st.file_uploader(f"Upload counts ({cid})")
+        if c: 
+            with open(os.path.join(cat_dir, COHORT_MAPPING[cid]), "wb") as f: f.write(c.getbuffer())
+    st.subheader("Step 2: Analysis Execution")
+    if st.button("🚀 EXECUTE DESEQ2 WORKFLOW"):
+        subprocess.run([sys.executable, os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Validation_Deseq2.py")], env={"OMICS_IN_DIR": cat_dir, "OMICS_OUT_DIR": cat_dir})
+
+elif "Proteomics Pipeline" in menu:
+    st.title("Proteomics Analysis")
+    cat_dir = os.path.join(SESSION_DIR, "Protéomique")
+    st.subheader("Step 1: Resource Loading")
+    col1, col2 = st.columns(2)
+    with col1:
+        pm = st.file_uploader("metadata.tsv")
+        if pm: 
+            with open(os.path.join(cat_dir, "metadata.tsv"), "wb") as f: f.write(pm.getbuffer())
+    with col2:
+        pg = st.file_uploader("proteinGroups.tsv")
+        if pg: 
+            with open(os.path.join(cat_dir, "proteinGroups.tsv"), "wb") as f: f.write(pg.getbuffer())
+    st.subheader("Step 2: Analysis Execution")
+    ca, cb = st.columns(2)
+    with ca:
+        if st.button("🚀 RUN PYTHON PIPELINE"):
+            subprocess.run([sys.executable, os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya.py")], env={"OMICS_IN_DIR": cat_dir, "OMICS_OUT_DIR": cat_dir})
+    with cb:
+        if st.button("🚀 RUN R PIPELINE"):
+            subprocess.run(["Rscript", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya_R.R")], env={"OMICS_IN_DIR": cat_dir, "OMICS_OUT_DIR": cat_dir})
+
+# ==========================================
+# REFERENCE VALIDATIONS (INTELLIGENT)
+# ==========================================
 elif menu == "🔍 Reference Validations":
     st.title("🔍 Literature Cross-Validation")
-    # (Implementation with dropdown and real-time metrics as before)
-    st.info("Select reference and run comparison.")
+    v_dir = os.path.join(SESSION_DIR, "Validations")
+    
+    val_case = st.selectbox("Select Validation Case", ["Transcriptomics (Cohort G)", "Proteomics (2w)", "Proteomics (7w)"])
+    st.caption("Expected: brain-2021-02002-File011.xlsx (RNA), results_2w.xlsx or results_7w.xlsx (Proteo)")
+    ref_f = st.file_uploader("Upload Reference File", type=["xlsx"])
+    
+    mode = "none"
+    if ref_f:
+        if "brain-2021-02002-File011" in ref_f.name: mode = "rna"
+        elif "results_2w" in ref_f.name: mode = "p2w"
+        elif "results_7w" in ref_f.name: mode = "p7w"
+        with open(os.path.join(v_dir, ref_f.name), "wb") as f: f.write(ref_f.getbuffer())
+
+    st.divider()
+    
+    # RNA
+    st.markdown(f"<div class='{'active' if mode in ['rna','none'] else 'grayed-out'}'>", unsafe_allow_html=True)
+    st.subheader("A. Transcriptomics (Cohort G)")
+    if st.button("Run RNA Validation"):
+        subprocess.run([sys.executable, os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py")], env={"OMICS_REF_FILE": os.path.join(v_dir, ref_f.name), "OMICS_IN_DIR": os.path.join(SESSION_DIR, "Transcriptomique"), "OMICS_OUT_DIR": v_dir})
+    rh, rm, re, rr = get_metrics_rna(os.path.join(v_dir, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.txt"))
+    c_rna = st.columns(4)
+    c_rna[0].markdown(f"<div class='metric-box'><div class='metric-label'>Common Hits</div><div class='metric-value'>{rh}</div></div>", unsafe_allow_html=True)
+    c_rna[3].markdown(f"<div class='metric-box'><div class='metric-label'>Matching Rate</div><div class='metric-value'>{rr}%</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    # PROTEO
+    st.markdown(f"<div class='{'active' if mode in ['p2w','p7w','none'] else 'grayed-out'}'>", unsafe_allow_html=True)
+    st.subheader("B. Proteomics (Table S8)")
+    if st.button("Run Protein Validation"):
+        subprocess.run([sys.executable, os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_Supriya.py")], env={"OMICS_REF_DIR": v_dir, "OMICS_OUT_DIR": os.path.join(SESSION_DIR, "Protéomique")})
+    p2h, p2m, p2e, p2r = get_metrics_proteo(os.path.join(SESSION_DIR, "Protéomique", "Python", "Comparaison_Bilan_Patho_2w.txt"))
+    p7h, p7m, p7e, p7r = get_metrics_proteo(os.path.join(SESSION_DIR, "Protéomique", "Python", "Comparaison_Bilan_Patho_7w.txt"))
+    cp = st.columns(2)
+    with cp[0]:
+        st.markdown(f"<div class='{'active' if mode in ['p2w','none'] else 'grayed-out'}'>", unsafe_allow_html=True)
+        st.write("**Case: 2 Weeks**")
+        cx = st.columns(2)
+        cx[0].markdown(f"<div class='metric-box'><div class='metric-label'>Common Hits</div><div class='metric-value'>{p2h}</div></div>", unsafe_allow_html=True)
+        cx[1].markdown(f"<div class='metric-box'><div class='metric-label'>Matching Rate</div><div class='metric-value'>{p2r}%</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with cp[1]:
+        st.markdown(f"<div class='{'active' if mode in ['p7w','none'] else 'grayed-out'}'>", unsafe_allow_html=True)
+        st.write("**Case: 7 Weeks**")
+        cx = st.columns(2)
+        cx[0].markdown(f"<div class='metric-box'><div class='metric-label'>Common Hits</div><div class='metric-value'>{p7h}</div></div>", unsafe_allow_html=True)
+        cx[1].markdown(f"<div class='metric-box'><div class='metric-label'>Matching Rate</div><div class='metric-value'>{p7r}%</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
