@@ -135,14 +135,14 @@ elif "Proteomics" in menu:
 elif "Metabolomics" in menu:
     st.title("Metabolomics Engine")
     cat_dir = os.path.join(SESSION_DIR, "Métabolomique")
-    m_file = st.file_uploader("Upload Metabolomics Data (CSV/XLSX)")
+    m_file = st.file_uploader("Upload Metabolomics Data")
     if m_file:
         with open(os.path.join(cat_dir, m_file.name), "wb") as f: f.write(m_file.getbuffer())
     if st.button("🚀 RUN METABOLOMICS ANALYSIS"):
         run_pipeline_safe("Metabo", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), "Métabolomique", {"OMICS_IN_DIR": cat_dir})
 
 # ==========================================
-# VALIDATIONS (WITH 2 CASES)
+# VALIDATIONS (RNA & PROTEO)
 # ==========================================
 elif menu == "🔍 Reference Validations":
     st.title("🔍 Literature Cross-Validation")
@@ -160,11 +160,10 @@ elif menu == "🔍 Reference Validations":
         st.markdown("</div>", unsafe_allow_html=True)
         
         st.divider()
-        st.subheader("B. Metabolomics (Validation)")
+        st.subheader("B. Proteomics (Supriya 2w/7w)")
         st.markdown("<div class='green-btn'>", unsafe_allow_html=True)
-        if st.button("Run Metabo Validation"):
-             # As specified: transcriptomique et métabolomique
-             st.info("Metabolomics validation triggered.")
+        if st.button("Run Protein Validation"):
+             run_pipeline_safe("Proteo Val", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_Supriya.py"), "Validations", {"OMICS_REF_FILE": ref_p, "OMICS_IN_DIR": os.path.join(SESSION_DIR, "Protéomique")})
         st.markdown("</div>", unsafe_allow_html=True)
         
         # Display results below
