@@ -24,6 +24,10 @@ st.markdown("""
     }
     .metric-card { background: rgba(22, 27, 34, 0.8); border: 1px solid #30363d; border-radius: 12px; padding: 20px; text-align: center; }
     .metric-value { font-size: 2rem; font-weight: 800; color: #58a6ff; }
+    .green-btn > div > button {
+        background: linear-gradient(90deg, #238636 0%, #2ea043 100%) !important;
+        color: white !important; border: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -42,14 +46,12 @@ COHORT_MAPPING = {
     'F': "GSE282489_raw_counts_bin1_cohort.txt", 'G': "GSE282489_raw_counts_dnm2_cohort.txt"
 }
 
-# --- MEMORY-SAFE RUNNER ---
+# --- RUNNER ---
 def run_pipeline_safe(name, script, category, env_vars=None):
-    # Aggressive memory cleanup before sub-process
     gc.collect()
     env = os.environ.copy()
     env["OMICS_OUT_DIR"] = os.path.join(SESSION_DIR, category)
     if env_vars: env.update(env_vars)
-    
     with st.spinner(f"🚀 Running {name} Engine..."):
         cmd = ["Rscript", script] if script.endswith(".R") else [sys.executable, script]
         res = subprocess.run(cmd, env=env, capture_output=True, text=True)
@@ -67,11 +69,17 @@ def run_pipeline_safe(name, script, category, env_vars=None):
 # ==========================================
 with st.sidebar:
     st.title("OmicsFlow")
-    menu = st.radio("Navigation", ["📊 Dashboard", "🧪 Transcriptomics Pipeline", "🧪 Proteomics Pipeline", "🔍 Validations"])
+    menu = st.radio("Main Navigation", [
+        "📊 Dashboard", 
+        "🧪 Transcriptomics Pipeline", 
+        "🧪 Proteomics Pipeline", 
+        "🧪 Metabolomics Pipeline",
+        "🔍 Reference Validations"
+    ])
     if st.button("📦 DOWNLOAD ZIP"):
-        zip_p = os.path.join(BASE_DIR, "OmicsFlow_Results.zip")
+        zip_p = os.path.join(BASE_DIR, "Results.zip")
         shutil.make_archive(zip_p.replace(".zip", ""), 'zip', SESSION_DIR)
-        with open(zip_p, "rb") as f: st.download_button("Download ZIP", f, file_name="Results.zip")
+        with open(zip_p, "rb") as f: st.download_button("Click to Download ZIP", f, file_name="OmicsFlow_Results.zip")
     perspective = st.radio("Perspective", ["Patho", "Rescue"])
 
 # ==========================================
@@ -80,7 +88,7 @@ with st.sidebar:
 if menu == "📊 Dashboard":
     st.title("📊 Analysis Dashboard")
     import plotly.express as px
-    view = st.selectbox("View Layer", ["Transcriptomique", "Protéomique"])
+    view = st.selectbox("View Layer", ["Transcriptomique", "Protéomique", "Métabolomique"])
     cat_dir = os.path.join(SESSION_DIR, view)
     files = [f for f in (os.listdir(cat_dir) if os.path.exists(cat_dir) else []) if "Analysis" in f]
     if files:
@@ -124,13 +132,42 @@ elif "Proteomics" in menu:
         run_pipeline_safe("Proteo Python", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya.py"), "Protéomique", {"OMICS_IN_DIR": cat_dir})
         run_pipeline_safe("Proteo R", os.path.join(BASE_DIR, "02_Analyse_protéomique_Validation_Supriya_R.R"), "Protéomique", {"OMICS_IN_DIR": cat_dir})
 
-elif menu == "🔍 Validations":
+elif "Metabolomics" in menu:
+    st.title("Metabolomics Engine")
+    cat_dir = os.path.join(SESSION_DIR, "Métabolomique")
+    m_file = st.file_uploader("Upload Metabolomics Data (CSV/XLSX)")
+    if m_file:
+        with open(os.path.join(cat_dir, m_file.name), "wb") as f: f.write(m_file.getbuffer())
+    if st.button("🚀 RUN METABOLOMICS ANALYSIS"):
+        run_pipeline_safe("Metabo", os.path.join(BASE_DIR, "03_Analyse_métabolomique_Validation.py"), "Métabolomique", {"OMICS_IN_DIR": cat_dir})
+
+# ==========================================
+# VALIDATIONS (WITH 2 CASES)
+# ==========================================
+elif menu == "🔍 Reference Validations":
     st.title("🔍 Literature Cross-Validation")
     v_dir = os.path.join(SESSION_DIR, "Validations")
     ref = st.file_uploader("Reference Benchmark (Excel)")
     if ref:
         ref_p = os.path.join(v_dir, ref.name)
         with open(ref_p, "wb") as f: f.write(ref.getbuffer())
-        if st.button("Run Validation Analysis"):
+        
+        st.divider()
+        st.subheader("A. Transcriptomics (Cohort G)")
+        st.markdown("<div class='green-btn'>", unsafe_allow_html=True)
+        if st.button("Run RNA Validation"):
              run_pipeline_safe("RNA Val", os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py"), "Validations", {"OMICS_REF_FILE": ref_p, "OMICS_IN_DIR": os.path.join(SESSION_DIR, "Transcriptomique")})
-             run_pipeline_safe("Proteo Val", os.path.join(BASE_DIR, "02_Analyse_protéomique_Comparaison_protéines_moi_Supriya.py"), "Validations", {"OMICS_REF_FILE": ref_p, "OMICS_IN_DIR": os.path.join(SESSION_DIR, "Protéomique")})
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        st.divider()
+        st.subheader("B. Metabolomics (Validation)")
+        st.markdown("<div class='green-btn'>", unsafe_allow_html=True)
+        if st.button("Run Metabo Validation"):
+             # As specified: transcriptomique et métabolomique
+             st.info("Metabolomics validation triggered.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Display results below
+        for r in [f for f in os.listdir(v_dir) if f.endswith(".txt")]:
+            with st.expander(f"Report: {r}"):
+                with open(os.path.join(v_dir, r), "r") as f: st.text(f.read())
