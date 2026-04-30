@@ -43,13 +43,12 @@ def get_metrics_rna(filepath):
     if not os.path.exists(filepath): return "-", "-", "-", "-"
     try:
         with open(filepath, "r", encoding="utf-8") as f: content = f.read()
-        h = re.search(r"Intersection_RNA_Patho_deseq2_standard.csv \((\d+) gènes\)", content)
-        m = re.search(r"Missing_RNA_Patho_deseq2_standard.csv \((\d+) gènes\)", content)
-        e = re.search(r"Extras_RNA_Patho_deseq2_standard.csv \((\d+) gènes\)", content)
-        v_h = int(h.group(1)) if h else 0
-        v_m = int(m.group(1)) if m else 0
-        rate = f"{(v_h / (v_h + v_m) * 100):.1f}" if (v_h + v_m) > 0 else "0"
-        return str(v_h), str(v_m), (e.group(1) if e else "0"), rate
+        h = re.search(r"Gènes Communs \(Intersection\) : (\d+)", content)
+        m = re.search(r"Gènes Manquants \(Papier seul\) : (\d+)", content)
+        e = re.search(r"Gènes Extras \(Analyse seule\) : (\d+)", content)
+        r = re.search(r"SCORE DE REPRODUCTIBILITÉ : ([\d.]+)%", content)
+        
+        return (h.group(1) if h else "0"), (m.group(1) if m else "0"), (e.group(1) if e else "0"), (r.group(1) if r else "0")
     except: return "-", "-", "-", "-"
 
 def get_metrics_proteo(filepath):
@@ -77,6 +76,8 @@ if menu == "📊 Dashboard":
     st.title("📊 Multi-Omics Studio")
     view = st.selectbox("Switch Omics View", ["Transcriptomique", "Protéomique", "Métabolomique"])
     cat_dir = os.path.join(SESSION_DIR, view)
+    if view == "Transcriptomique": cat_dir = os.path.join(cat_dir, "Deseq2")
+    
     files = [f for f in (os.listdir(cat_dir) if os.path.exists(cat_dir) else []) if f.endswith(".csv")]
     c_l, c_r = st.columns([3, 1])
     with c_l:
@@ -173,7 +174,7 @@ elif menu == "🔍 Reference Validations":
     st.subheader("A. Transcriptomics (Cohort G)")
     if st.button("Run RNA Validation"):
         subprocess.run([sys.executable, os.path.join(BASE_DIR, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.py")], env={"OMICS_REF_FILE": os.path.join(v_dir, ref_f.name), "OMICS_IN_DIR": os.path.join(SESSION_DIR, "Transcriptomique"), "OMICS_OUT_DIR": v_dir})
-    rh, rm, re, rr = get_metrics_rna(os.path.join(v_dir, "01_Analyse_transcriptomique_Comparaison_genes_moi_papier_Deseq2_Cohorte_G.txt"))
+    rh, rm, re, rr = get_metrics_rna(os.path.join(v_dir, "Deseq2", "01_Analyse_transcriptomique_Comparaison_G_deseq2.txt"))
     c_rna = st.columns(4)
     c_rna[0].markdown(f"<div class='metric-box'><div class='metric-label'>Common Hits</div><div class='metric-value'>{rh}</div></div>", unsafe_allow_html=True)
     c_rna[3].markdown(f"<div class='metric-box'><div class='metric-label'>Matching Rate</div><div class='metric-value'>{rr}%</div></div>", unsafe_allow_html=True)
