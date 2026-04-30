@@ -27,15 +27,15 @@ except ImportError:
 # --- CONFIGURATION DES CHEMINS ---
 INPUT_DIR = os.environ.get("OMICS_IN_DIR", r"D:\Stage-CRBS\Stage_analyses\Transcriptomique")
 METADATA_PATH = os.environ.get("OMICS_META_PATH", os.path.join(INPUT_DIR, "metadata.txt"))
-OUTPUT_DIR = os.environ.get("OMICS_OUT_DIR", r"D:\Stage-CRBS\Stage_analyses\Résultats\Transcriptomique")
+OUTPUT_DIR = r"D:\Stage-CRBS\Stage_analyses\Résultats\Transcriptomique\Deseq2"
 
 warnings.filterwarnings("ignore")
 
 COHORT_MAPPING = {
-    'A': "counts_mtm1_cohort.csv",
-    'B': "counts_bin1_cohort.csv",
-    'C': "counts_dnm2_cohort.csv",
-    'D': "GSE160078_Raw_gene_counts_matrix_Cohort_MTM1_Updated-07-01-2024.xlsx",
+    'A': "GSE160079_Raw_gene_counts_matrix_Cohort_MTM1-a.txt",
+    'B': "GSE160081_Raw_gene_counts_matrix_Cohort_MTM1-b.txt",
+    'C': "GSE160083_Raw_gene_counts_matrix_Cohort_MTM1-c.txt",
+    'D': "GSE160077_Raw_gene_counts_matrix_Cohort_BIN1.txt",
     'E': "GSE160078_Raw_gene_counts_matrix_Cohort_DNM2_Updated-07-01-2024.xlsx",
     'F': "GSE282489_raw_counts_bin1_cohort.txt",
     'G': "GSE282489_raw_counts_dnm2_cohort.txt"
@@ -47,13 +47,7 @@ def normalize_name(name):
 def load_metadata():
     if not os.path.exists(METADATA_PATH):
         raise FileNotFoundError(f"Metadata non trouvé: {METADATA_PATH}")
-    try:
-        # Détection robuste du séparateur
-        df = pd.read_csv(METADATA_PATH, sep="\t")
-        if len(df.columns) < 2: df = pd.read_csv(METADATA_PATH, sep=";")
-        if len(df.columns) < 2: df = pd.read_csv(METADATA_PATH, sep=",")
-    except Exception as e:
-        raise Exception(f"Erreur lors de la lecture du metadata : {e}")
+    df = pd.read_csv(METADATA_PATH, sep="\t")
     df['Sample_name'] = df['Sample_name'].astype(str).str.strip()
     return df
 
@@ -74,79 +68,46 @@ def run_deseq2_logic(counts_df, metadata_df, contrast_num, contrast_den):
     sub_meta = metadata_df[metadata_df['Group'].isin([contrast_num, contrast_den])].copy()
     sub_meta.set_index('Sample_name', inplace=True)
     available = [c for c in sub_meta.index if c in counts_df.columns]
-    
     if len(available) < 2: return None
-    
     sub_meta = sub_meta.loc[available]
     sub_counts = counts_df[available].T
     sub_counts = sub_counts.loc[:, (sub_counts.sum(axis=0) > 0)]
-    
-    if sub_counts.empty or len(sub_meta['Group'].unique()) < 2:
-        return None
-
+    if sub_counts.empty or len(sub_meta['Group'].unique()) < 2: return None
     try:
         dds = DeseqDataSet(counts=sub_counts, metadata=sub_meta, design_factors="Group", quiet=True)
         dds.deseq2()
         stat_res = DeseqStats(dds, contrast=["Group", contrast_num, contrast_den], quiet=True)
         stat_res.summary() 
-        if hasattr(stat_res, 'results_df'):
-            return stat_res.results_df
-        return stat_res.results 
+        return stat_res.results_df if hasattr(stat_res, 'results_df') else stat_res.results
     except Exception as e:
         print(f"   [Info] Échec DESeq2 ({contrast_num} vs {contrast_den}): {e}")
         return None
     finally:
-        # Crucial to release memory even if it fails
         if 'dds' in locals(): del dds
         gc.collect()
 
 def create_global_pptx(all_stats):
     prs = Presentation()
-    title_slide_layout = prs.slide_layouts[0]
-    slide = prs.slides.add_slide(title_slide_layout)
-    slide.shapes.title.text = "Rapport d'Analyse Transcriptomique"
-    slide.placeholders[1].text = f"Bilan Multi-Cohortes : DESeq2 & Efficacité Rescue\nDate : {datetime.now().strftime('%d/%m/%Y')}"
-
-    blank_slide_layout = prs.slide_layouts[5]
+    slide = prs.slides.add_slide(prs.slide_layouts[0])
+    slide.shapes.title.text = "Rapport d'Analyse Transcriptomique (DESeq2)"
+    slide.placeholders[1].text = f"Bilan Multi-Cohortes\nDate : {datetime.now().strftime('%d/%m/%Y')}"
     for stat in all_stats:
-        slide = prs.slides.add_slide(blank_slide_layout)
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
         slide.shapes.title.text = f"Synthèse Cohorte {stat['id']}"
-
         data = [
-            ["Indicateur", "Valeur"],
-            ["Échantillons WT / WT Treated", f"{stat['n_wt']} / {stat['n_wtt']}"],
-            ["Échantillons Disease / Rescue", f"{stat['n_dis']} / {stat['n_res']}"],
-            ["Référence Choisie", stat['ref_grp']],
-            ["Signature Patho (|L2FC|>1 & P<0.05)", str(stat['n_patho_signif'])],
-            ["Ratio Patho / Total Gènes", f"{stat['ratio_patho']:.2%}"],
-            ["Efficacité Rescue (Patho + Rescue Signif.)", str(stat['n_rescue_signif'])],
-            ["Ratio Rescue / Patho", f"{stat['ratio_rescue']:.1%}"]
+            ["Métrique / Indicateur", "Valeur / Résultat"],
+            ["Total Gènes Analysés", f"{stat['n_genes']:,}"],
+            ["Effectifs par Groupe (N)", f"WT: {stat['n_wt']} | WT_t: {stat['n_wtt']} | Dis: {stat['n_dis']} | Res: {stat['n_res']}"],
+            ["Seuils Statistiques", "|Log2FC| > 1 et p-adj < 0.05"],
+            ["Référence de Calibration", f"Groupe {stat['ref_grp']}"],
+            ["Taille Signature Patho", f"{stat['n_patho_signif']} gènes"],
+            ["Taille Efficacité Rescue", f"{stat['n_rescue_signif']} gènes corrigés"]
         ]
-
-        rows, cols = 8, 2
-        left, top, width, height = Inches(1), Inches(1.5), Inches(8), Inches(4.5)
-        table = slide.shapes.add_table(rows, cols, left, top, width, height).table
-
+        rows, cols = len(data), 2
+        table = slide.shapes.add_table(rows, cols, Inches(1), Inches(1.5), Inches(8), Inches(4)).table
         for r in range(rows):
-            for c in range(cols):
-                cell = table.cell(r, c)
-                cell.text = data[r][c]
-                paragraph = cell.text_frame.paragraphs[0]
-                paragraph.font.size = Pt(18)
-                paragraph.alignment = PP_ALIGN.CENTER
-                if r == 0:
-                    cell.fill.solid()
-                    # Correction ici : fore_color est plus robuste que foreground_color
-                    cell.fill.fore_color.rgb = RGBColor(47, 84, 150)
-                    paragraph.font.color.rgb = RGBColor(255, 255, 255)
-                    paragraph.font.bold = True
-                elif r % 2 == 0:
-                    cell.fill.solid()
-                    cell.fill.fore_color.rgb = RGBColor(235, 241, 250)
-
-    pptx_path = os.path.join(OUTPUT_DIR, "Deseq2_Rapport_Analyse_Transcriptomique.pptx")
-    prs.save(pptx_path)
-    print(f"\n> Rapport PowerPoint généré : {pptx_path}")
+            for c in range(cols): table.cell(r, c).text = data[r][c]
+    prs.save(os.path.join(OUTPUT_DIR, "Deseq2_Rapport_Analyse_Transcriptomique.pptx"))
 
 def process_cohort(cohort_id, metadata_all):
     file_name = COHORT_MAPPING.get(cohort_id)
@@ -154,27 +115,19 @@ def process_cohort(cohort_id, metadata_all):
     file_path = os.path.join(INPUT_DIR, file_name)
     if not os.path.exists(file_path): return None
 
-    print(f"--- Analyse Cohorte {cohort_id} ---")
-    if file_name.endswith('.xlsx'):
-        raw_counts = pd.read_excel(file_path, skiprows=1)
-    else:
-        # Détection robuste du séparateur pour CSV/TXT
-        raw_counts = pd.read_csv(file_path, sep="\t")
-        if len(raw_counts.columns) < 2: raw_counts = pd.read_csv(file_path, sep=";")
-        if len(raw_counts.columns) < 2: raw_counts = pd.read_csv(file_path, sep=",")
+    print(f"--- Analyse Cohorte {cohort_id} (Deseq2) ---")
+    if file_name.endswith('.xlsx'): raw_counts = pd.read_excel(file_path, skiprows=1)
+    else: raw_counts = pd.read_csv(file_path, sep=None, engine='python')
 
     raw_counts.columns = [str(c).strip() for c in raw_counts.columns]
     gene_col = raw_counts.columns[0]
     raw_counts.rename(columns={gene_col: 'Ensembl_Gene_ID'}, inplace=True)
-    
     cohort_meta = metadata_all[metadata_all['Cohort'] == cohort_id].copy()
     mapping = {c: c for c in raw_counts.columns if c in cohort_meta['Sample_name'].values}
-    
     if not mapping:
         norm_available = {normalize_name(c): c for c in raw_counts.columns if c != 'Ensembl_Gene_ID'}
         for sample in cohort_meta['Sample_name']:
-            if normalize_name(sample) in norm_available:
-                mapping[norm_available[normalize_name(sample)]] = sample
+            if normalize_name(sample) in norm_available: mapping[norm_available[normalize_name(sample)]] = sample
 
     raw_counts.rename(columns=mapping, inplace=True)
     raw_counts = raw_counts[['Ensembl_Gene_ID'] + list(mapping.values())]
@@ -182,77 +135,61 @@ def process_cohort(cohort_id, metadata_all):
     raw_counts = raw_counts.apply(pd.to_numeric, errors='coerce').fillna(0).astype(int)
 
     cpm_df = calculate_cpm_means(raw_counts, cohort_meta)
-
-    # --- LOGIQUE DE RÉFÉRENCE (Seuil 1%) ---
     ref_grp = 'WT'
-    total_genes = len(raw_counts)
-    seuil_1_pourcent = int(total_genes * 0.01)
+    seuil_1_pourcent = int(len(raw_counts) * 0.01)
 
     if 'WT treated' in cohort_meta['Group'].unique():
         res_calib = run_deseq2_logic(raw_counts, cohort_meta, 'WT treated', 'WT')
         if res_calib is not None:
             n_diff = (res_calib['padj'] < 0.05).sum()
-            if n_diff < seuil_1_pourcent:
-                ref_grp = 'WT treated'
-                print(f"   [Info] Utilisation de 'WT treated' comme référence ({n_diff} gènes diff. < {seuil_1_pourcent} [1%])")
-            else:
-                print(f"   [Info] Maintien de 'WT' comme référence ({n_diff} gènes diff. >= {seuil_1_pourcent} [1%])")
+            if n_diff < seuil_1_pourcent: ref_grp = 'WT treated'
 
     res_patho = run_deseq2_logic(raw_counts, cohort_meta, 'Disease', ref_grp)
     res_rescue = None
-    if 'Rescue' in cohort_meta['Group'].unique():
-        res_rescue = run_deseq2_logic(raw_counts, cohort_meta, 'Rescue', 'Disease')
+    if 'Rescue' in cohort_meta['Group'].unique(): res_rescue = run_deseq2_logic(raw_counts, cohort_meta, 'Rescue', 'Disease')
 
     final = pd.DataFrame(index=raw_counts.index)
-    final['Moyenne_CPM_WT'] = cpm_df.get('Moyenne_CPM_WT', 0.0)
-    final['Moyenne_CPM_WT_treated'] = cpm_df.get('Moyenne_CPM_WT_treated', 0.0)
-    final['Moyenne_CPM_Disease'] = cpm_df.get('Moyenne_CPM_Disease', 0.0)
-    final['Moyenne_CPM_Rescue'] = cpm_df.get('Moyenne_CPM_Rescue', 0.0)
-
     final['Pvalue_Patho'] = res_patho['padj'].reindex(final.index).fillna(1.0) if res_patho is not None else 1.0
-    final['Pvalue_Rescue'] = res_rescue['padj'].reindex(final.index).fillna(1.0) if res_rescue is not None else 1.0
-    final['Ref_Utilisee'] = ref_grp
     final['Log2FC_Patho'] = res_patho['log2FoldChange'].reindex(final.index).fillna(0.0) if res_patho is not None else 0.0
+    final['Pvalue_Rescue'] = res_rescue['padj'].reindex(final.index).fillna(1.0) if res_rescue is not None else 1.0
     final['Log2FC_Rescue'] = res_rescue['log2FoldChange'].reindex(final.index).fillna(0.0) if res_rescue is not None else 0.0
-
-    is_patho = (final['Pvalue_Patho'] < 0.05) & (final['Log2FC_Patho'].abs() > 1)
-    final['Significatif_Patho'] = is_patho.map({True: 'OUI', False: 'NON'})
     
+    is_patho = (final['Pvalue_Patho'] < 0.05) & (final['Log2FC_Patho'].abs() > 1)
     opposed = np.sign(final['Log2FC_Patho']) != np.sign(final['Log2FC_Rescue'])
     is_rescue = (final['Pvalue_Rescue'] < 0.05) & is_patho & opposed
-    final['Significatif_Rescue'] = is_rescue.map({True: 'OUI', False: 'NON'})
 
-    final.to_csv(os.path.join(OUTPUT_DIR, f"Deseq2_Genes_Analysis_Cohort_{cohort_id}.csv"), sep=";")
-    signature_patho = final[final['Significatif_Patho'] == 'OUI']
-    signature_patho.to_csv(os.path.join(OUTPUT_DIR, f"Deseq2_Genes_Signature_Patho_Cohort_{cohort_id}.csv"), sep=";")
-    efficacite_rescue = final[final['Significatif_Rescue'] == 'OUI']
-    efficacite_rescue.to_csv(os.path.join(OUTPUT_DIR, f"Deseq2_Genes_Efficacite_Rescue_Cohort_{cohort_id}.csv"), sep=";")
+    # Noms de fichiers uniformisés
+    final.to_csv(os.path.join(OUTPUT_DIR, f"Deseq2_full_analysis_Cohort_{cohort_id}.csv"), sep=";")
+    final[is_patho].to_csv(os.path.join(OUTPUT_DIR, f"Deseq2_Genes_Signature_Patho_Cohort_{cohort_id}.csv"), sep=";")
+    final[is_rescue].to_csv(os.path.join(OUTPUT_DIR, f"Deseq2_Genes_Efficacite_Rescue_Cohort_{cohort_id}.csv"), sep=";")
     
-    print(f"   [OK] 3 fichiers CSV générés pour la Cohorte {cohort_id}")
-
+    grp_sizes = {
+        'WT': len(cohort_meta[cohort_meta['Group'] == 'WT']),
+        'WT treated': len(cohort_meta[cohort_meta['Group'] == 'WT treated']),
+        'Disease': len(cohort_meta[cohort_meta['Group'] == 'Disease']),
+        'Rescue': len(cohort_meta[cohort_meta['Group'] == 'Rescue'])
+    }
+    
     return {
-        'id': cohort_id,
-        'n_wt': len(cohort_meta[cohort_meta['Group'] == 'WT']),
-        'n_wtt': len(cohort_meta[cohort_meta['Group'] == 'WT treated']),
-        'n_dis': len(cohort_meta[cohort_meta['Group'] == 'Disease']),
-        'n_res': len(cohort_meta[cohort_meta['Group'] == 'Rescue']),
-        'ref_grp': ref_grp,
-        'n_patho_signif': is_patho.sum(),
-        'ratio_patho': is_patho.sum() / len(final) if len(final) > 0 else 0,
-        'n_rescue_signif': is_rescue.sum(),
-        'ratio_rescue': is_rescue.sum() / is_patho.sum() if is_patho.sum() > 0 else 0
+        'id': cohort_id, 
+        'ref_grp': ref_grp, 
+        'n_genes': len(raw_counts),
+        'n_wt': grp_sizes['WT'],
+        'n_wtt': grp_sizes['WT treated'],
+        'n_dis': grp_sizes['Disease'],
+        'n_res': grp_sizes['Rescue'],
+        'n_patho_signif': is_patho.sum(), 
+        'n_rescue_signif': is_rescue.sum()
     }
 
 def main():
     if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
     all_cohort_stats = []
     meta_data = load_metadata()
-    for cid in sorted(COHORT_MAPPING.keys()):
+    for cid in ['A','B','C','D','E','F','G']:
         stats = process_cohort(cid, meta_data)
         if stats: all_cohort_stats.append(stats)
-    
-    if all_cohort_stats:
-        create_global_pptx(all_cohort_stats)
+    if all_cohort_stats: create_global_pptx(all_cohort_stats)
 
 if __name__ == "__main__":
     main()
